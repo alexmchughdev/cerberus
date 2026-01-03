@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Cerberus Control Room</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;700;800&family=Source+Serif+4:wght@400;600&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">Network Guardian</p>
+        <h1>Cerberus Control Room</h1>
+      </div>
+      <button id="theme-toggle" class="toggle" type="button" aria-label="Toggle theme">
+        Dark Mode
+      </button>
+    </header>
+
+    <main class="layout">
+      <section class="panel hero">
+        <h2>Live Summary</h2>
+        <p id="generated-at" class="muted">Waiting for telemetry...</p>
+        <div id="stats-grid" class="stats-grid"></div>
+      </section>
+
+      <section class="panel">
+        <h2>Recent Devices</h2>
+        <div id="recent-devices" class="list"></div>
+      </section>
+
+      <section class="panel">
+        <h2>Top Services</h2>
+        <ul id="top-services" class="rank-list"></ul>
+      </section>
+
+      <section class="panel">
+        <h2>Top Vendors</h2>
+        <ul id="top-vendors" class="rank-list"></ul>
+      </section>
+    </main>
+
+    <script src="/app.js"></script>
+  </body>
+  </html>

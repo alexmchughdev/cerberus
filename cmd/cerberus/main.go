@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
@@ -14,6 +15,7 @@ import (
 	"github.com/cilium/ebpf/link"
 	"github.com/cilium/ebpf/ringbuf"
 
+	"github.com/zrougamed/cerberus/internal/api"
 	"github.com/zrougamed/cerberus/internal/monitor"
 	"github.com/zrougamed/cerberus/internal/utils"
 )
@@ -34,6 +36,31 @@ func main() {
 		panic(err)
 	}
 	defer mon.Close()
+
+	// Start REST API + dashboard server
+	apiAddr := os.Getenv("CERBERUS_HTTP_ADDR")
+	if apiAddr == "" {
+		apiAddr = "127.0.0.1:8080"
+	}
+	apiServer := api.NewServer(mon)
+	apiHandler, err := apiServer.Handler()
+	if err != nil {
+		panic(fmt.Errorf("failed to create API handler: %w", err))
+	}
+	httpServer := &http.Server{
+		Addr:              apiAddr,
+		Handler:           apiHandler,
+		ReadHeaderTimeout: 5 * time.Second,
+	}
+	go func() {
+		fmt.Printf("Dashboard available at http://%s\n", apiAddr)
+		if err := httpServer.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			fmt.Printf("API server error: %v\n", err)
+		}
+	}()
+	defer func() {
+		_ = httpServer.Close()
+	}()
 
 	// Load BPF collection from compiled object file
 	spec, err := ebpf.LoadCollectionSpec("cerberus_tc.o")

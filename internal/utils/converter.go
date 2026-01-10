@@ -190,6 +190,92 @@ func InspectHTTP(payload [32]byte) (method string, path string) {
 	return method, path
 }
 
+func ExtractHTTPHost(payload [32]byte) string {
+	str := strings.ToLower(string(payload[:]))
+	idx := strings.Index(str, "host:")
+	if idx == -1 {
+		return ""
+	}
+	rest := string(payload[idx+len("host:"):])
+	line := strings.TrimSpace(strings.SplitN(rest, "\n", 2)[0])
+	line = strings.TrimSpace(strings.TrimSuffix(line, "\r"))
+	return line
+}
+
+func DNSQueryTypeName(queryType uint16) string {
+	switch queryType {
+	case 1:
+		return "A"
+	case 2:
+		return "NS"
+	case 5:
+		return "CNAME"
+	case 12:
+		return "PTR"
+	case 15:
+		return "MX"
+	case 16:
+		return "TXT"
+	case 28:
+		return "AAAA"
+	default:
+		return fmt.Sprintf("TYPE_%d", queryType)
+	}
+}
+
+func DNSRCodeName(rcode uint8) string {
+	switch rcode {
+	case 0:
+		return "NOERROR"
+	case 1:
+		return "FORMERR"
+	case 2:
+		return "SERVFAIL"
+	case 3:
+		return "NXDOMAIN"
+	case 4:
+		return "NOTIMP"
+	case 5:
+		return "REFUSED"
+	default:
+		return fmt.Sprintf("RCODE_%d", rcode)
+	}
+}
+
+func InspectDNSDetails(payload [32]byte) (domain, queryType, responseCode string, isResponse bool) {
+	if len(payload) < 12 {
+		return "", "", "", false
+	}
+
+	flags := uint16(payload[2])<<8 | uint16(payload[3])
+	isResponse = flags&0x8000 != 0
+	responseCode = DNSRCodeName(uint8(flags & 0x000F))
+
+	domain = InspectDNS(payload)
+	if domain == "" {
+		return domain, "", responseCode, isResponse
+	}
+
+	offset := 12
+	for offset < len(payload) {
+		labelLen := int(payload[offset])
+		if labelLen == 0 {
+			offset++
+			break
+		}
+		if labelLen > 63 || offset+labelLen+1 > len(payload) {
+			return domain, "", responseCode, isResponse
+		}
+		offset += labelLen + 1
+	}
+	if offset+2 > len(payload) {
+		return domain, "", responseCode, isResponse
+	}
+	qtype := binary.BigEndian.Uint16(payload[offset : offset+2])
+	queryType = DNSQueryTypeName(qtype)
+	return domain, queryType, responseCode, isResponse
+}
+
 // InspectTLS extracts SNI from TLS Client Hello
 func InspectTLS(payload [32]byte) string {
 	// TLS Client Hello starts with: 0x16 (handshake), 0x03 0x01/0x03 (version)
@@ -215,6 +301,9 @@ func GetL7Info(evt *models.NetworkEvent) string {
 			return domain
 		}
 	case models.EVENT_TYPE_HTTP:
+		if host := ExtractHTTPHost(evt.L7Payload); host != "" {
+			return host
+		}
 		method, path := InspectHTTP(evt.L7Payload)
 		if method != "" {
 			if path != "" {

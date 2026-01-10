@@ -132,6 +132,8 @@ type DeviceInfo struct {
 	Targets           []string              `json:"targets"`
 	Services          map[string]int        `json:"services"` // service -> count
 	DNSDomains        map[string]int        `json:"dns_domains,omitempty"`
+	DNSQueryTypes     map[string]int        `json:"dns_query_types,omitempty"`
+	DNSResponseCodes  map[string]int        `json:"dns_response_codes,omitempty"`
 	HTTPHosts         map[string]int        `json:"http_hosts,omitempty"`
 	TLSSNIs           map[string]int        `json:"tls_snis,omitempty"`
 	SeenPatterns      map[string]bool       `json:"-"`

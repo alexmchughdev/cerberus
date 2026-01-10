@@ -39,12 +39,14 @@ func (s *Server) Handler() (http.Handler, error) {
 }
 
 type summaryResponse struct {
-	GeneratedAt  time.Time           `json:"generated_at"`
-	PacketStats  map[string]uint64   `json:"packet_stats"`
-	DeviceCount  int                 `json:"device_count"`
-	TopServices  map[string]int      `json:"top_services"`
-	TopVendors   map[string]int      `json:"top_vendors"`
-	RecentDevice []deviceSummaryItem `json:"recent_devices"`
+	GeneratedAt      time.Time           `json:"generated_at"`
+	PacketStats      map[string]uint64   `json:"packet_stats"`
+	DeviceCount      int                 `json:"device_count"`
+	TopServices      map[string]int      `json:"top_services"`
+	TopVendors       map[string]int      `json:"top_vendors"`
+	DNSQueryTypes    map[string]int      `json:"dns_query_types"`
+	DNSResponseCodes map[string]int      `json:"dns_response_codes"`
+	RecentDevice     []deviceSummaryItem `json:"recent_devices"`
 }
 
 type deviceSummaryItem struct {
@@ -80,11 +82,19 @@ func (s *Server) handleSummary(w http.ResponseWriter, r *http.Request) {
 
 	topServices := make(map[string]int)
 	topVendors := make(map[string]int)
+	dnsQueryTypes := make(map[string]int)
+	dnsResponseCodes := make(map[string]int)
 	deviceItems := make([]deviceSummaryItem, 0, len(devices))
 
 	for _, d := range devices {
 		for svc, count := range d.Services {
 			topServices[svc] += count
+		}
+		for qtype, count := range d.DNSQueryTypes {
+			dnsQueryTypes[qtype] += count
+		}
+		for rcode, count := range d.DNSResponseCodes {
+			dnsResponseCodes[rcode] += count
 		}
 		topVendors[d.Vendor]++
 		deviceItems = append(deviceItems, deviceSummaryItem{
@@ -109,12 +119,14 @@ func (s *Server) handleSummary(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, summaryResponse{
-		GeneratedAt:  time.Now(),
-		PacketStats:  packetStats,
-		DeviceCount:  len(devices),
-		TopServices:  topMap(topServices, 8),
-		TopVendors:   topMap(topVendors, 8),
-		RecentDevice: deviceItems,
+		GeneratedAt:      time.Now(),
+		PacketStats:      packetStats,
+		DeviceCount:      len(devices),
+		TopServices:      topMap(topServices, 8),
+		TopVendors:       topMap(topVendors, 8),
+		DNSQueryTypes:    topMap(dnsQueryTypes, 8),
+		DNSResponseCodes: topMap(dnsResponseCodes, 8),
+		RecentDevice:     deviceItems,
 	})
 }
 

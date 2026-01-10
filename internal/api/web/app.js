@@ -63,6 +63,8 @@ async function refresh() {
   renderStats(data.packet_stats, data.device_count);
   renderRankList("top-services", data.top_services);
   renderRankList("top-vendors", data.top_vendors);
+  renderRankList("dns-query-types", data.dns_query_types);
+  renderRankList("dns-response-codes", data.dns_response_codes);
   renderDevices(data.recent_devices || []);
 }
 

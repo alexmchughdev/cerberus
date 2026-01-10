@@ -287,6 +287,8 @@ func (nm *NetworkMonitor) TrackEvent(evt *models.NetworkEvent) {
 			Targets:           []string{},
 			Services:          make(map[string]int),
 			DNSDomains:        make(map[string]int),
+			DNSQueryTypes:     make(map[string]int),
+			DNSResponseCodes:  make(map[string]int),
 			HTTPHosts:         make(map[string]int),
 			TLSSNIs:           make(map[string]int),
 			SeenPatterns:      make(map[string]bool),
@@ -315,6 +317,12 @@ func (nm *NetworkMonitor) TrackEvent(evt *models.NetworkEvent) {
 	if device.HTTPHosts == nil {
 		device.HTTPHosts = make(map[string]int)
 	}
+	if device.DNSQueryTypes == nil {
+		device.DNSQueryTypes = make(map[string]int)
+	}
+	if device.DNSResponseCodes == nil {
+		device.DNSResponseCodes = make(map[string]int)
+	}
 	if device.TLSSNIs == nil {
 		device.TLSSNIs = make(map[string]int)
 	}
@@ -333,13 +341,23 @@ func (nm *NetworkMonitor) TrackEvent(evt *models.NetworkEvent) {
 		switch evt.EventType {
 		case models.EVENT_TYPE_DNS:
 			device.DNSDomains[l7Info]++
-			device.DNSQueries++
 		case models.EVENT_TYPE_HTTP:
 			device.HTTPHosts[l7Info]++
 			device.HTTPRequests++
 		case models.EVENT_TYPE_TLS:
 			device.TLSSNIs[l7Info]++
 			device.TLSConnections++
+		}
+	}
+
+	if evt.EventType == models.EVENT_TYPE_DNS {
+		device.DNSQueries++
+		_, queryType, responseCode, isResponse := utils.InspectDNSDetails(evt.L7Payload)
+		if queryType != "" {
+			device.DNSQueryTypes[queryType]++
+		}
+		if isResponse && responseCode != "" {
+			device.DNSResponseCodes[responseCode]++
 		}
 	}
 

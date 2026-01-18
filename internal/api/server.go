@@ -3,9 +3,11 @@ package api
 import (
 	"embed"
 	"encoding/json"
+	"fmt"
 	"io/fs"
 	"net/http"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/zrougamed/cerberus/internal/models"
@@ -28,6 +30,7 @@ func (s *Server) Handler() (http.Handler, error) {
 
 	mux.HandleFunc("/api/v1/summary", s.handleSummary)
 	mux.HandleFunc("/api/v1/devices", s.handleDevices)
+	mux.HandleFunc("/metrics", s.handleMetrics)
 
 	staticSub, err := fs.Sub(webFS, "web")
 	if err != nil {
@@ -147,6 +150,51 @@ func (s *Server) handleDevices(w http.ResponseWriter, r *http.Request) {
 	})
 
 	writeJSON(w, http.StatusOK, out)
+}
+
+func (s *Server) handleMetrics(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	devices := s.monitor.GetStats()
+	w.Header().Set("Content-Type", "text/plain; version=0.0.4; charset=utf-8")
+	w.WriteHeader(http.StatusOK)
+
+	fmt.Fprintln(w, "# HELP cerberus_packets_total Total observed packets by protocol.")
+	fmt.Fprintln(w, "# TYPE cerberus_packets_total counter")
+	fmt.Fprintf(w, "cerberus_packets_total{protocol=\"total\"} %d\n", s.monitor.Stats.TotalPackets)
+	fmt.Fprintf(w, "cerberus_packets_total{protocol=\"arp\"} %d\n", s.monitor.Stats.ArpPackets)
+	fmt.Fprintf(w, "cerberus_packets_total{protocol=\"tcp\"} %d\n", s.monitor.Stats.TcpPackets)
+	fmt.Fprintf(w, "cerberus_packets_total{protocol=\"udp\"} %d\n", s.monitor.Stats.UdpPackets)
+	fmt.Fprintf(w, "cerberus_packets_total{protocol=\"icmp\"} %d\n", s.monitor.Stats.IcmpPackets)
+	fmt.Fprintf(w, "cerberus_packets_total{protocol=\"dns\"} %d\n", s.monitor.Stats.DnsPackets)
+	fmt.Fprintf(w, "cerberus_packets_total{protocol=\"http\"} %d\n", s.monitor.Stats.HttpPackets)
+	fmt.Fprintf(w, "cerberus_packets_total{protocol=\"tls\"} %d\n", s.monitor.Stats.TlsPackets)
+	fmt.Fprintln(w)
+
+	fmt.Fprintln(w, "# HELP cerberus_devices_total Number of tracked devices.")
+	fmt.Fprintln(w, "# TYPE cerberus_devices_total gauge")
+	fmt.Fprintf(w, "cerberus_devices_total %d\n\n", len(devices))
+
+	fmt.Fprintln(w, "# HELP cerberus_device_protocol_events_total Per-device protocol event counters.")
+	fmt.Fprintln(w, "# TYPE cerberus_device_protocol_events_total counter")
+	for _, d := range devices {
+		mac := escapeLabelValue(d.MAC)
+		vendor := escapeLabelValue(d.Vendor)
+		fmt.Fprintf(w, "cerberus_device_protocol_events_total{mac=\"%s\",vendor=\"%s\",protocol=\"dns\"} %d\n", mac, vendor, d.DNSQueries)
+		fmt.Fprintf(w, "cerberus_device_protocol_events_total{mac=\"%s\",vendor=\"%s\",protocol=\"http\"} %d\n", mac, vendor, d.HTTPRequests)
+		fmt.Fprintf(w, "cerberus_device_protocol_events_total{mac=\"%s\",vendor=\"%s\",protocol=\"tls\"} %d\n", mac, vendor, d.TLSConnections)
+		fmt.Fprintf(w, "cerberus_device_protocol_events_total{mac=\"%s\",vendor=\"%s\",protocol=\"tcp\"} %d\n", mac, vendor, d.TCPConnections)
+		fmt.Fprintf(w, "cerberus_device_protocol_events_total{mac=\"%s\",vendor=\"%s\",protocol=\"udp\"} %d\n", mac, vendor, d.UDPConnections)
+		fmt.Fprintf(w, "cerberus_device_protocol_events_total{mac=\"%s\",vendor=\"%s\",protocol=\"icmp\"} %d\n", mac, vendor, d.ICMPPackets)
+	}
+}
+
+func escapeLabelValue(value string) string {
+	replacer := strings.NewReplacer(`\`, `\\`, `"`, `\"`, "\n", `\n`)
+	return replacer.Replace(value)
 }
 
 func topMap(values map[string]int, limit int) map[string]int {

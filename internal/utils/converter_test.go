@@ -60,3 +60,27 @@ func TestInspectDNSDetailsQueryAndResponse(t *testing.T) {
 		t.Fatalf("expected empty domain/qtype for minimal response payload")
 	}
 }
+
+func TestTLSVersionFromPayload(t *testing.T) {
+	var tls12 [32]byte
+	tls12[0] = 0x16
+	tls12[1] = 0x03
+	tls12[2] = 0x03
+	if got := TLSVersionFromPayload(tls12); got != "TLS 1.2" {
+		t.Fatalf("expected TLS 1.2, got %q", got)
+	}
+
+	var tls13 [32]byte
+	tls13[0] = 0x16
+	tls13[1] = 0x03
+	tls13[2] = 0x04
+	if got := TLSVersionFromPayload(tls13); got != "TLS 1.3" {
+		t.Fatalf("expected TLS 1.3, got %q", got)
+	}
+
+	var invalid [32]byte
+	invalid[0] = 0x17
+	if got := TLSVersionFromPayload(invalid); got != "" {
+		t.Fatalf("expected empty version for invalid record, got %q", got)
+	}
+}

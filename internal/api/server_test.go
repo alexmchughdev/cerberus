@@ -69,6 +69,9 @@ func TestMetricsEndpointIncludesCoreCounters(t *testing.T) {
 		TCPConnections: 5,
 		UDPConnections: 3,
 		ICMPPackets:    0,
+		TLSVersions: map[string]int{
+			"TLS 1.3": 2,
+		},
 	})
 
 	srv := NewServer(mon)
@@ -85,6 +88,7 @@ func TestMetricsEndpointIncludesCoreCounters(t *testing.T) {
 		`cerberus_packets_total{protocol="dns"} 4`,
 		`cerberus_devices_total 1`,
 		`cerberus_device_protocol_events_total{mac="aa:bb:cc:dd:ee:ff",vendor="Acme \"Corp\"",protocol="dns"} 3`,
+		`cerberus_tls_versions_total{version="TLS 1.3"} 2`,
 	}
 	for _, token := range mustContain {
 		if !strings.Contains(body, token) {

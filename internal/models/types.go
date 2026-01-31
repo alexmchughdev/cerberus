@@ -136,6 +136,7 @@ type DeviceInfo struct {
 	DNSResponseCodes  map[string]int        `json:"dns_response_codes,omitempty"`
 	HTTPHosts         map[string]int        `json:"http_hosts,omitempty"`
 	TLSSNIs           map[string]int        `json:"tls_snis,omitempty"`
+	TLSVersions       map[string]int        `json:"tls_versions,omitempty"`
 	SeenPatterns      map[string]bool       `json:"-"`
 	TrafficTypeCounts map[TrafficType]int   `json:"traffic_type_counts"`
 	FlowStats         map[string]*FlowStats `json:"-"` // flowKey -> stats

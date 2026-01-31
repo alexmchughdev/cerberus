@@ -291,6 +291,7 @@ func (nm *NetworkMonitor) TrackEvent(evt *models.NetworkEvent) {
 			DNSResponseCodes:  make(map[string]int),
 			HTTPHosts:         make(map[string]int),
 			TLSSNIs:           make(map[string]int),
+			TLSVersions:       make(map[string]int),
 			SeenPatterns:      make(map[string]bool),
 			TrafficTypeCounts: make(map[models.TrafficType]int),
 			FlowStats:         make(map[string]*models.FlowStats),
@@ -326,6 +327,9 @@ func (nm *NetworkMonitor) TrackEvent(evt *models.NetworkEvent) {
 	if device.TLSSNIs == nil {
 		device.TLSSNIs = make(map[string]int)
 	}
+	if device.TLSVersions == nil {
+		device.TLSVersions = make(map[string]int)
+	}
 
 	// Update device info
 	device.LastSeen = time.Now()
@@ -347,6 +351,9 @@ func (nm *NetworkMonitor) TrackEvent(evt *models.NetworkEvent) {
 		case models.EVENT_TYPE_TLS:
 			device.TLSSNIs[l7Info]++
 			device.TLSConnections++
+			if version := utils.TLSVersionFromPayload(evt.L7Payload); version != "" {
+				device.TLSVersions[version]++
+			}
 		}
 	}
 

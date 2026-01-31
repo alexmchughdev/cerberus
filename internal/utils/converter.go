@@ -290,7 +290,38 @@ func InspectTLS(payload [32]byte) string {
 	// Simple SNI extraction would require parsing the full TLS handshake
 	// TODO: Full SNI parsing requires more than 32 bytes typically
 
+	if version := TLSVersionFromPayload(payload); version != "" {
+		return version
+	}
 	return "TLS"
+}
+
+func TLSVersionFromPayload(payload [32]byte) string {
+	if len(payload) < 3 {
+		return ""
+	}
+	if payload[0] != 0x16 {
+		return ""
+	}
+	major := payload[1]
+	minor := payload[2]
+	if major != 0x03 {
+		return ""
+	}
+	switch minor {
+	case 0x00:
+		return "SSL 3.0"
+	case 0x01:
+		return "TLS 1.0"
+	case 0x02:
+		return "TLS 1.1"
+	case 0x03:
+		return "TLS 1.2"
+	case 0x04:
+		return "TLS 1.3"
+	default:
+		return fmt.Sprintf("TLS 0x%02x", minor)
+	}
 }
 
 // GetL7Info extracts layer 7 information based on event type and payload

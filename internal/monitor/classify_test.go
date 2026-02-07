@@ -2,6 +2,7 @@ package monitor
 
 import (
 	"testing"
+	"time"
 
 	"github.com/zrougamed/cerberus/internal/models"
 )
@@ -68,5 +69,24 @@ func TestClassifyTLSTraffic(t *testing.T) {
 	handshake[5] = 0x03
 	if got := nm.classifyTLSTraffic(handshake); got != models.TrafficTLSHandshake {
 		t.Fatalf("expected TLS handshake fallback, got %s", got)
+	}
+}
+
+func TestPickRecentDNSDomain(t *testing.T) {
+	nm := &NetworkMonitor{}
+	now := time.Now()
+	device := &models.DeviceInfo{
+		RecentDNSQueries: map[string]time.Time{
+			"old.example": now.Add(-5 * time.Minute),
+			"new.example": now.Add(-30 * time.Second),
+		},
+	}
+
+	got := nm.pickRecentDNSDomain(device, now, 2*time.Minute)
+	if got != "new.example" {
+		t.Fatalf("expected new.example, got %q", got)
+	}
+	if _, exists := device.RecentDNSQueries["old.example"]; exists {
+		t.Fatalf("expected old.example to be evicted")
 	}
 }

@@ -50,6 +50,7 @@ type summaryResponse struct {
 	DNSQueryTypes    map[string]int      `json:"dns_query_types"`
 	DNSResponseCodes map[string]int      `json:"dns_response_codes"`
 	TLSVersions      map[string]int      `json:"tls_versions"`
+	DNSCorrelated    map[string]int      `json:"dns_correlated_domains"`
 	RecentDevice     []deviceSummaryItem `json:"recent_devices"`
 }
 
@@ -89,6 +90,7 @@ func (s *Server) handleSummary(w http.ResponseWriter, r *http.Request) {
 	dnsQueryTypes := make(map[string]int)
 	dnsResponseCodes := make(map[string]int)
 	tlsVersions := make(map[string]int)
+	dnsCorrelated := make(map[string]int)
 	deviceItems := make([]deviceSummaryItem, 0, len(devices))
 
 	for _, d := range devices {
@@ -103,6 +105,9 @@ func (s *Server) handleSummary(w http.ResponseWriter, r *http.Request) {
 		}
 		for version, count := range d.TLSVersions {
 			tlsVersions[version] += count
+		}
+		for domain, count := range d.CorrelatedDomains {
+			dnsCorrelated[domain] += count
 		}
 		topVendors[d.Vendor]++
 		deviceItems = append(deviceItems, deviceSummaryItem{
@@ -135,6 +140,7 @@ func (s *Server) handleSummary(w http.ResponseWriter, r *http.Request) {
 		DNSQueryTypes:    topMap(dnsQueryTypes, 8),
 		DNSResponseCodes: topMap(dnsResponseCodes, 8),
 		TLSVersions:      topMap(tlsVersions, 8),
+		DNSCorrelated:    topMap(dnsCorrelated, 8),
 		RecentDevice:     deviceItems,
 	})
 }
@@ -203,6 +209,16 @@ func (s *Server) handleMetrics(w http.ResponseWriter, r *http.Request) {
 	for _, d := range devices {
 		for version, count := range d.TLSVersions {
 			fmt.Fprintf(w, "cerberus_tls_versions_total{version=\"%s\"} %d\n", escapeLabelValue(version), count)
+		}
+	}
+	fmt.Fprintln(w)
+
+	fmt.Fprintln(w, "# HELP cerberus_dns_correlated_connections_total Connections correlated to recent DNS queries.")
+	fmt.Fprintln(w, "# TYPE cerberus_dns_correlated_connections_total counter")
+	for _, d := range devices {
+		fmt.Fprintf(w, "cerberus_dns_correlated_connections_total{mac=\"%s\"} %d\n", escapeLabelValue(d.MAC), d.DNSCorrelated)
+		for domain, count := range d.CorrelatedDomains {
+			fmt.Fprintf(w, "cerberus_dns_correlated_connections_total{mac=\"%s\",domain=\"%s\"} %d\n", escapeLabelValue(d.MAC), escapeLabelValue(domain), count)
 		}
 	}
 }

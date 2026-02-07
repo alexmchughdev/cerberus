@@ -289,9 +289,11 @@ func (nm *NetworkMonitor) TrackEvent(evt *models.NetworkEvent) {
 			DNSDomains:        make(map[string]int),
 			DNSQueryTypes:     make(map[string]int),
 			DNSResponseCodes:  make(map[string]int),
+			CorrelatedDomains: make(map[string]int),
 			HTTPHosts:         make(map[string]int),
 			TLSSNIs:           make(map[string]int),
 			TLSVersions:       make(map[string]int),
+			RecentDNSQueries:  make(map[string]time.Time),
 			SeenPatterns:      make(map[string]bool),
 			TrafficTypeCounts: make(map[models.TrafficType]int),
 			FlowStats:         make(map[string]*models.FlowStats),
@@ -324,11 +326,17 @@ func (nm *NetworkMonitor) TrackEvent(evt *models.NetworkEvent) {
 	if device.DNSResponseCodes == nil {
 		device.DNSResponseCodes = make(map[string]int)
 	}
+	if device.CorrelatedDomains == nil {
+		device.CorrelatedDomains = make(map[string]int)
+	}
 	if device.TLSSNIs == nil {
 		device.TLSSNIs = make(map[string]int)
 	}
 	if device.TLSVersions == nil {
 		device.TLSVersions = make(map[string]int)
+	}
+	if device.RecentDNSQueries == nil {
+		device.RecentDNSQueries = make(map[string]time.Time)
 	}
 
 	// Update device info
@@ -366,6 +374,9 @@ func (nm *NetworkMonitor) TrackEvent(evt *models.NetworkEvent) {
 		if isResponse && responseCode != "" {
 			device.DNSResponseCodes[responseCode]++
 		}
+		if l7Info != "" {
+			device.RecentDNSQueries[l7Info] = time.Now()
+		}
 	}
 
 	// Track connections
@@ -396,6 +407,12 @@ func (nm *NetworkMonitor) TrackEvent(evt *models.NetworkEvent) {
 	patternKey := fmt.Sprintf("%s:%s->%s:%d:%s", protocol, srcIP, dstIP, evt.DstPort, trafficType)
 	if !device.SeenPatterns[patternKey] {
 		device.SeenPatterns[patternKey] = true
+		if evt.EventType != models.EVENT_TYPE_DNS && evt.EventType != models.EVENT_TYPE_ARP && evt.EventType != models.EVENT_TYPE_ICMP {
+			if domain := nm.pickRecentDNSDomain(device, time.Now(), 2*time.Minute); domain != "" {
+				device.DNSCorrelated++
+				device.CorrelatedDomains[domain]++
+			}
+		}
 
 		// Get interface name from index
 		ifName := utils.IfIndexToName(evt.IfIndex)
@@ -430,6 +447,22 @@ func (nm *NetworkMonitor) TrackEvent(evt *models.NetworkEvent) {
 		default:
 		}
 	}
+}
+
+func (nm *NetworkMonitor) pickRecentDNSDomain(device *models.DeviceInfo, now time.Time, ttl time.Duration) string {
+	var latestDomain string
+	var latestTime time.Time
+	for domain, seenAt := range device.RecentDNSQueries {
+		if now.Sub(seenAt) > ttl {
+			delete(device.RecentDNSQueries, domain)
+			continue
+		}
+		if latestDomain == "" || seenAt.After(latestTime) {
+			latestDomain = domain
+			latestTime = seenAt
+		}
+	}
+	return latestDomain
 }
 
 func (nm *NetworkMonitor) persistWorker() {

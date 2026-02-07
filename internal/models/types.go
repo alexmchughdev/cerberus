@@ -134,9 +134,12 @@ type DeviceInfo struct {
 	DNSDomains        map[string]int        `json:"dns_domains,omitempty"`
 	DNSQueryTypes     map[string]int        `json:"dns_query_types,omitempty"`
 	DNSResponseCodes  map[string]int        `json:"dns_response_codes,omitempty"`
+	DNSCorrelated     int                   `json:"dns_correlated_connections,omitempty"`
+	CorrelatedDomains map[string]int        `json:"correlated_domains,omitempty"`
 	HTTPHosts         map[string]int        `json:"http_hosts,omitempty"`
 	TLSSNIs           map[string]int        `json:"tls_snis,omitempty"`
 	TLSVersions       map[string]int        `json:"tls_versions,omitempty"`
+	RecentDNSQueries  map[string]time.Time  `json:"-"`
 	SeenPatterns      map[string]bool       `json:"-"`
 	TrafficTypeCounts map[TrafficType]int   `json:"traffic_type_counts"`
 	FlowStats         map[string]*FlowStats `json:"-"` // flowKey -> stats

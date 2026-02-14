@@ -25,6 +25,9 @@ type NetworkMonitor struct {
 	mu             sync.RWMutex
 	newDeviceChan  chan *models.DeviceInfo
 	newPatternChan chan *models.CommunicationPattern
+	alerts         []models.AlertEvent
+	alertRuleState map[string]bool
+	alertConfig    models.AlertRuleConfig
 	localSubnet    *net.IPNet
 	Stats          struct {
 		TotalPackets uint64
@@ -61,6 +64,13 @@ func NewNetworkMonitor(cacheSize int, dbPath string) (*NetworkMonitor, error) {
 		serviceDB:      databases.LoadServiceDatabase(),
 		newDeviceChan:  make(chan *models.DeviceInfo, 100),
 		newPatternChan: make(chan *models.CommunicationPattern, 1000),
+		alerts:         make([]models.AlertEvent, 0, 128),
+		alertRuleState: make(map[string]bool),
+		alertConfig: models.AlertRuleConfig{
+			MaxDNSQueriesPerDevice: 200,
+			MaxTCPConnections:      500,
+			MaxUniqueTargets:       40,
+		},
 		localSubnet:    localSubnet,
 	}
 
@@ -438,6 +448,7 @@ func (nm *NetworkMonitor) TrackEvent(evt *models.NetworkEvent) {
 
 	// Update cache
 	nm.Cache.Add(srcMAC, device)
+	nm.evaluateAlerts(device)
 
 	// Notify if new device
 	// TODO: add to syslog or alerting system
@@ -447,6 +458,52 @@ func (nm *NetworkMonitor) TrackEvent(evt *models.NetworkEvent) {
 		default:
 		}
 	}
+}
+
+func (nm *NetworkMonitor) evaluateAlerts(device *models.DeviceInfo) {
+	if device == nil {
+		return
+	}
+	nm.fireAlertIfNeeded(device, "dns_query_volume", device.DNSQueries > nm.alertConfig.MaxDNSQueriesPerDevice,
+		"high", fmt.Sprintf("DNS queries exceeded threshold (%d > %d)", device.DNSQueries, nm.alertConfig.MaxDNSQueriesPerDevice))
+	nm.fireAlertIfNeeded(device, "tcp_connection_volume", device.TCPConnections > nm.alertConfig.MaxTCPConnections,
+		"high", fmt.Sprintf("TCP connections exceeded threshold (%d > %d)", device.TCPConnections, nm.alertConfig.MaxTCPConnections))
+	nm.fireAlertIfNeeded(device, "target_spread", len(device.Targets) > nm.alertConfig.MaxUniqueTargets,
+		"medium", fmt.Sprintf("Unique targets exceeded threshold (%d > %d)", len(device.Targets), nm.alertConfig.MaxUniqueTargets))
+}
+
+func (nm *NetworkMonitor) fireAlertIfNeeded(device *models.DeviceInfo, rule string, triggered bool, severity, message string) {
+	key := fmt.Sprintf("%s|%s", device.MAC, rule)
+	if triggered {
+		if nm.alertRuleState[key] {
+			return
+		}
+		nm.alertRuleState[key] = true
+		alert := models.AlertEvent{
+			ID:         fmt.Sprintf("%d-%s-%s", time.Now().UnixNano(), device.MAC, rule),
+			DeviceMAC:  device.MAC,
+			DeviceIP:   device.IP,
+			Vendor:     device.Vendor,
+			Rule:       rule,
+			Severity:   severity,
+			Message:    message,
+			ObservedAt: time.Now(),
+		}
+		nm.alerts = append(nm.alerts, alert)
+		if len(nm.alerts) > 500 {
+			nm.alerts = nm.alerts[len(nm.alerts)-500:]
+		}
+		return
+	}
+	delete(nm.alertRuleState, key)
+}
+
+func (nm *NetworkMonitor) GetAlerts() []models.AlertEvent {
+	nm.mu.RLock()
+	defer nm.mu.RUnlock()
+	out := make([]models.AlertEvent, len(nm.alerts))
+	copy(out, nm.alerts)
+	return out
 }
 
 func (nm *NetworkMonitor) pickRecentDNSDomain(device *models.DeviceInfo, now time.Time, ttl time.Duration) string {

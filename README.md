@@ -492,7 +492,7 @@ curl https://zrouga.email
 - [ ] Track DNS response codes and query types
 - [ ] Correlate DNS queries with subsequent connections
 - [ ] Export to Prometheus/Grafana
-- [ ] Custom alerting rules
+- [x] Custom alerting rules
 - [ ] GeoIP location tracking
 
 ## Performance

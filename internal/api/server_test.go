@@ -1,6 +1,7 @@
 package api
 
 import (
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -99,6 +100,69 @@ func TestMetricsEndpointIncludesCoreCounters(t *testing.T) {
 	for _, token := range mustContain {
 		if !strings.Contains(body, token) {
 			t.Fatalf("metrics body missing token %q", token)
+		}
+	}
+}
+
+func TestAlertsEndpointReturnsRecentAlertsFirst(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "test.db")
+	mon, err := monitor.NewNetworkMonitor(10, dbPath)
+	if err != nil {
+		t.Fatalf("failed to create monitor: %v", err)
+	}
+	defer func() {
+		_ = mon.Close()
+		_ = os.Remove(dbPath)
+	}()
+
+	for i := 0; i < 201; i++ {
+		mon.TrackEvent(&models.NetworkEvent{
+			EventType: models.EVENT_TYPE_DNS,
+			SrcMac:    [6]byte{0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0x01},
+			SrcIP:     0xC0A8010A, // 192.168.1.10
+			DstIP:     0x08080808, // 8.8.8.8
+			DstPort:   53,
+		})
+	}
+	time.Sleep(2 * time.Millisecond)
+	for i := 0; i < 501; i++ {
+		mon.TrackEvent(&models.NetworkEvent{
+			EventType: models.EVENT_TYPE_TCP,
+			SrcMac:    [6]byte{0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0x02},
+			SrcIP:     0xC0A80114, // 192.168.1.20
+			DstIP:     0x01010101, // 1.1.1.1
+			DstPort:   443,
+			TCPFlags:  0x02,
+		})
+	}
+
+	srv := NewServer(mon)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/alerts", nil)
+	rr := httptest.NewRecorder()
+	srv.handleAlerts(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rr.Code)
+	}
+
+	var out []models.AlertEvent
+	if err := json.Unmarshal(rr.Body.Bytes(), &out); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	if len(out) == 0 {
+		t.Fatalf("expected alerts response to contain items")
+	}
+	if len(out) < 2 {
+		t.Fatalf("expected at least two alerts, got %d", len(out))
+	}
+	if out[0].Rule != "tcp_connection_volume" {
+		t.Fatalf("expected most recent alert to be tcp_connection_volume, got %q", out[0].Rule)
+	}
+	if out[1].Rule != "dns_query_volume" {
+		t.Fatalf("expected second alert to be dns_query_volume, got %q", out[1].Rule)
+	}
+	for i := 1; i < len(out); i++ {
+		if out[i-1].ObservedAt.Before(out[i].ObservedAt) {
+			t.Fatalf("expected alerts in descending order by observed_at")
 		}
 	}
 }

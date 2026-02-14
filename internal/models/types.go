@@ -114,6 +114,23 @@ type FlowStats struct {
 	LastSeen    time.Time `json:"last_seen"`
 }
 
+type AlertRuleConfig struct {
+	MaxDNSQueriesPerDevice int `json:"max_dns_queries_per_device"`
+	MaxTCPConnections      int `json:"max_tcp_connections"`
+	MaxUniqueTargets       int `json:"max_unique_targets"`
+}
+
+type AlertEvent struct {
+	ID         string    `json:"id"`
+	DeviceMAC  string    `json:"device_mac"`
+	DeviceIP   string    `json:"device_ip"`
+	Vendor     string    `json:"vendor"`
+	Rule       string    `json:"rule"`
+	Severity   string    `json:"severity"`
+	Message    string    `json:"message"`
+	ObservedAt time.Time `json:"observed_at"`
+}
+
 type DeviceInfo struct {
 	MAC               string                `json:"mac"`
 	IP                string                `json:"ip"`

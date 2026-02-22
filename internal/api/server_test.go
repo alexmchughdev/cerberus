@@ -73,6 +73,10 @@ func TestMetricsEndpointIncludesCoreCounters(t *testing.T) {
 		TLSVersions: map[string]int{
 			"TLS 1.3": 2,
 		},
+		EncryptedDNS: map[string]int{
+			"dot": 1,
+			"doh": 2,
+		},
 		DNSCorrelated: 2,
 		CorrelatedDomains: map[string]int{
 			"example.com": 2,
@@ -94,6 +98,8 @@ func TestMetricsEndpointIncludesCoreCounters(t *testing.T) {
 		`cerberus_devices_total 1`,
 		`cerberus_device_protocol_events_total{mac="aa:bb:cc:dd:ee:ff",vendor="Acme \"Corp\"",protocol="dns"} 3`,
 		`cerberus_tls_versions_total{version="TLS 1.3"} 2`,
+		`cerberus_encrypted_dns_total{mac="aa:bb:cc:dd:ee:ff",mode="dot"} 1`,
+		`cerberus_encrypted_dns_total{mac="aa:bb:cc:dd:ee:ff",mode="doh"} 2`,
 		`cerberus_dns_correlated_connections_total{mac="aa:bb:cc:dd:ee:ff"} 2`,
 		`cerberus_dns_correlated_connections_total{mac="aa:bb:cc:dd:ee:ff",domain="example.com"} 2`,
 	}

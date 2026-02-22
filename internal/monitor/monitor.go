@@ -41,6 +41,19 @@ type NetworkMonitor struct {
 	}
 }
 
+var knownDoHEndpoints = map[string]struct{}{
+	"1.1.1.1":         {},
+	"1.0.0.1":         {},
+	"8.8.8.8":         {},
+	"8.8.4.4":         {},
+	"9.9.9.9":         {},
+	"149.112.112.112": {},
+	"208.67.222.222":  {},
+	"208.67.220.220":  {},
+	"94.140.14.14":    {},
+	"94.140.15.15":    {},
+}
+
 func NewNetworkMonitor(cacheSize int, dbPath string) (*NetworkMonitor, error) {
 	cache, err := lru.New[string, *models.DeviceInfo](cacheSize)
 	if err != nil {
@@ -197,6 +210,25 @@ func (nm *NetworkMonitor) classifyTLSTraffic(payload [32]byte) models.TrafficTyp
 	return models.TrafficTLSHandshake
 }
 
+func (nm *NetworkMonitor) identifyEncryptedDNS(eventType uint8, srcPort, dstPort uint16, srcIP, dstIP string) string {
+	if srcPort == 853 || dstPort == 853 {
+		return "dot"
+	}
+	if eventType != models.EVENT_TYPE_TLS && eventType != models.EVENT_TYPE_TCP {
+		return ""
+	}
+	if srcPort != 443 && dstPort != 443 {
+		return ""
+	}
+	if _, ok := knownDoHEndpoints[srcIP]; ok {
+		return "doh"
+	}
+	if _, ok := knownDoHEndpoints[dstIP]; ok {
+		return "doh"
+	}
+	return ""
+}
+
 func (nm *NetworkMonitor) getServiceName(port uint16, protocol string) string {
 	if svc, ok := nm.serviceDB[port]; ok && (svc.Protocol == protocol || svc.Protocol == "BOTH") {
 		return svc.Service
@@ -299,6 +331,7 @@ func (nm *NetworkMonitor) TrackEvent(evt *models.NetworkEvent) {
 			DNSDomains:        make(map[string]int),
 			DNSQueryTypes:     make(map[string]int),
 			DNSResponseCodes:  make(map[string]int),
+			EncryptedDNS:      make(map[string]int),
 			CorrelatedDomains: make(map[string]int),
 			HTTPHosts:         make(map[string]int),
 			TLSSNIs:           make(map[string]int),
@@ -335,6 +368,9 @@ func (nm *NetworkMonitor) TrackEvent(evt *models.NetworkEvent) {
 	}
 	if device.DNSResponseCodes == nil {
 		device.DNSResponseCodes = make(map[string]int)
+	}
+	if device.EncryptedDNS == nil {
+		device.EncryptedDNS = make(map[string]int)
 	}
 	if device.CorrelatedDomains == nil {
 		device.CorrelatedDomains = make(map[string]int)
@@ -387,6 +423,9 @@ func (nm *NetworkMonitor) TrackEvent(evt *models.NetworkEvent) {
 		if l7Info != "" {
 			device.RecentDNSQueries[l7Info] = time.Now()
 		}
+	}
+	if mode := nm.identifyEncryptedDNS(evt.EventType, evt.SrcPort, evt.DstPort, srcIP, dstIP); mode != "" {
+		device.EncryptedDNS[mode]++
 	}
 
 	// Track connections

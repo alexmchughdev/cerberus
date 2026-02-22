@@ -480,18 +480,18 @@ curl https://zrouga.email
 ## Roadmap
 
 - [ ] Redis backend for distributed deployments
-- [ ] REST API for external integrations
-- [ ] Web dashboard for visualization
+- [x] REST API for external integrations
+- [x] Web dashboard for visualization
 - [ ] Anomaly detection using ML
 - [ ] IPv6 support
 - [ ] Expand L7 payload capture to 128-256 bytes for better SNI/HTTP header extraction
 - [ ] Add proper DNS response parsing
 - [ ] Add HTTP Host header extraction
-- [ ] Implement TLS version detection
-- [ ] Support for identifying encrypted DNS (DoH/DoT)
-- [ ] Track DNS response codes and query types
-- [ ] Correlate DNS queries with subsequent connections
-- [ ] Export to Prometheus/Grafana
+- [x] Implement TLS version detection
+- [x] Support for identifying encrypted DNS (DoH/DoT)
+- [x] Track DNS response codes and query types
+- [x] Correlate DNS queries with subsequent connections
+- [x] Export to Prometheus/Grafana
 - [x] Custom alerting rules
 - [ ] GeoIP location tracking
 

@@ -90,3 +90,17 @@ func TestPickRecentDNSDomain(t *testing.T) {
 		t.Fatalf("expected old.example to be evicted")
 	}
 }
+
+func TestIdentifyEncryptedDNS(t *testing.T) {
+	nm := &NetworkMonitor{}
+
+	if got := nm.identifyEncryptedDNS(models.EVENT_TYPE_TCP, 50000, 853, "192.168.1.5", "1.1.1.1"); got != "dot" {
+		t.Fatalf("expected dot, got %q", got)
+	}
+	if got := nm.identifyEncryptedDNS(models.EVENT_TYPE_TLS, 50001, 443, "192.168.1.5", "1.1.1.1"); got != "doh" {
+		t.Fatalf("expected doh, got %q", got)
+	}
+	if got := nm.identifyEncryptedDNS(models.EVENT_TYPE_TLS, 50001, 443, "192.168.1.5", "142.250.1.1"); got != "" {
+		t.Fatalf("expected empty for non-resolver HTTPS destination, got %q", got)
+	}
+}

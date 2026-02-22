@@ -50,6 +50,7 @@ type summaryResponse struct {
 	TopVendors       map[string]int      `json:"top_vendors"`
 	DNSQueryTypes    map[string]int      `json:"dns_query_types"`
 	DNSResponseCodes map[string]int      `json:"dns_response_codes"`
+	EncryptedDNS     map[string]int      `json:"encrypted_dns"`
 	TLSVersions      map[string]int      `json:"tls_versions"`
 	DNSCorrelated    map[string]int      `json:"dns_correlated_domains"`
 	RecentDevice     []deviceSummaryItem `json:"recent_devices"`
@@ -90,6 +91,7 @@ func (s *Server) handleSummary(w http.ResponseWriter, r *http.Request) {
 	topVendors := make(map[string]int)
 	dnsQueryTypes := make(map[string]int)
 	dnsResponseCodes := make(map[string]int)
+	encryptedDNS := make(map[string]int)
 	tlsVersions := make(map[string]int)
 	dnsCorrelated := make(map[string]int)
 	deviceItems := make([]deviceSummaryItem, 0, len(devices))
@@ -103,6 +105,9 @@ func (s *Server) handleSummary(w http.ResponseWriter, r *http.Request) {
 		}
 		for rcode, count := range d.DNSResponseCodes {
 			dnsResponseCodes[rcode] += count
+		}
+		for mode, count := range d.EncryptedDNS {
+			encryptedDNS[mode] += count
 		}
 		for version, count := range d.TLSVersions {
 			tlsVersions[version] += count
@@ -140,6 +145,7 @@ func (s *Server) handleSummary(w http.ResponseWriter, r *http.Request) {
 		TopVendors:       topMap(topVendors, 8),
 		DNSQueryTypes:    topMap(dnsQueryTypes, 8),
 		DNSResponseCodes: topMap(dnsResponseCodes, 8),
+		EncryptedDNS:     topMap(encryptedDNS, 8),
 		TLSVersions:      topMap(tlsVersions, 8),
 		DNSCorrelated:    topMap(dnsCorrelated, 8),
 		RecentDevice:     deviceItems,
@@ -223,6 +229,15 @@ func (s *Server) handleMetrics(w http.ResponseWriter, r *http.Request) {
 	for _, d := range devices {
 		for version, count := range d.TLSVersions {
 			fmt.Fprintf(w, "cerberus_tls_versions_total{version=\"%s\"} %d\n", escapeLabelValue(version), count)
+		}
+	}
+	fmt.Fprintln(w)
+
+	fmt.Fprintln(w, "# HELP cerberus_encrypted_dns_total Encrypted DNS sessions identified by mode.")
+	fmt.Fprintln(w, "# TYPE cerberus_encrypted_dns_total counter")
+	for _, d := range devices {
+		for mode, count := range d.EncryptedDNS {
+			fmt.Fprintf(w, "cerberus_encrypted_dns_total{mac=\"%s\",mode=\"%s\"} %d\n", escapeLabelValue(d.MAC), escapeLabelValue(mode), count)
 		}
 	}
 	fmt.Fprintln(w)

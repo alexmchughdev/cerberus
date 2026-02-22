@@ -151,6 +151,7 @@ type DeviceInfo struct {
 	DNSDomains        map[string]int        `json:"dns_domains,omitempty"`
 	DNSQueryTypes     map[string]int        `json:"dns_query_types,omitempty"`
 	DNSResponseCodes  map[string]int        `json:"dns_response_codes,omitempty"`
+	EncryptedDNS      map[string]int        `json:"encrypted_dns,omitempty"`
 	DNSCorrelated     int                   `json:"dns_correlated_connections,omitempty"`
 	CorrelatedDomains map[string]int        `json:"correlated_domains,omitempty"`
 	HTTPHosts         map[string]int        `json:"http_hosts,omitempty"`

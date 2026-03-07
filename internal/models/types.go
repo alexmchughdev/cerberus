@@ -135,6 +135,9 @@ type DeviceInfo struct {
 	MAC               string                `json:"mac"`
 	IP                string                `json:"ip"`
 	Vendor            string                `json:"vendor"`
+	GeoCountry        string                `json:"geo_country,omitempty"`
+	GeoCountryCode    string                `json:"geo_country_code,omitempty"`
+	GeoCity           string                `json:"geo_city,omitempty"`
 	Interface         string                `json:"interface,omitempty"` // Network interface name (e.g., eth0, wlan0)
 	FirstSeen         time.Time             `json:"first_seen"`
 	LastSeen          time.Time             `json:"last_seen"`

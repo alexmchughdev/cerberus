@@ -104,3 +104,22 @@ func TestIdentifyEncryptedDNS(t *testing.T) {
 		t.Fatalf("expected empty for non-resolver HTTPS destination, got %q", got)
 	}
 }
+
+func TestIsGeoIPEligible(t *testing.T) {
+	cases := []struct {
+		ip   string
+		want bool
+	}{
+		{ip: "8.8.8.8", want: true},
+		{ip: "1.1.1.1", want: true},
+		{ip: "192.168.1.1", want: false},
+		{ip: "10.0.0.1", want: false},
+		{ip: "127.0.0.1", want: false},
+		{ip: "invalid-ip", want: false},
+	}
+	for _, tc := range cases {
+		if got := isGeoIPEligible(tc.ip); got != tc.want {
+			t.Fatalf("isGeoIPEligible(%q) = %v, want %v", tc.ip, got, tc.want)
+		}
+	}
+}

@@ -315,6 +315,14 @@ struct network_event {
 
 ## Configuration
 
+### GeoIP Location Tracking
+
+Cerberus supports optional GeoIP enrichment for public IPs when a MaxMind GeoLite2 City database is provided:
+
+```bash
+CERBERUS_GEOIP_DB=/path/to/GeoLite2-City.mmdb sudo ./build/cerberus
+```
+
 ### Network Interface
 
 By default, Cerberus monitors all physical network interfaces. To customize:
@@ -493,7 +501,7 @@ curl https://zrouga.email
 - [x] Correlate DNS queries with subsequent connections
 - [x] Export to Prometheus/Grafana
 - [x] Custom alerting rules
-- [ ] GeoIP location tracking
+- [x] GeoIP location tracking
 
 ## Performance
 

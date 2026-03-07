@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
+	"net/netip"
 	"strings"
 	"sync"
 	"time"
@@ -14,6 +15,7 @@ import (
 	"github.com/zrougamed/cerberus/internal/utils"
 
 	lru "github.com/hashicorp/golang-lru/v2"
+	"github.com/oschwald/geoip2-golang"
 	"github.com/tidwall/buntdb"
 )
 
@@ -28,6 +30,7 @@ type NetworkMonitor struct {
 	alerts         []models.AlertEvent
 	alertRuleState map[string]bool
 	alertConfig    models.AlertRuleConfig
+	geoipDB        *geoip2.Reader
 	localSubnet    *net.IPNet
 	Stats          struct {
 		TotalPackets uint64
@@ -97,7 +100,24 @@ func NewNetworkMonitor(cacheSize int, dbPath string) (*NetworkMonitor, error) {
 func (nm *NetworkMonitor) Close() error {
 	close(nm.newDeviceChan)
 	close(nm.newPatternChan)
+	if nm.geoipDB != nil {
+		_ = nm.geoipDB.Close()
+	}
 	return nm.db.Close()
+}
+
+func (nm *NetworkMonitor) EnableGeoIP(dbPath string) error {
+	reader, err := geoip2.Open(dbPath)
+	if err != nil {
+		return err
+	}
+	nm.mu.Lock()
+	if nm.geoipDB != nil {
+		_ = nm.geoipDB.Close()
+	}
+	nm.geoipDB = reader
+	nm.mu.Unlock()
+	return nil
 }
 
 func (nm *NetworkMonitor) classifyTCPTraffic(srcIP, dstIP string, srcPort, dstPort uint16, tcpFlags uint8) models.TrafficType {
@@ -227,6 +247,34 @@ func (nm *NetworkMonitor) identifyEncryptedDNS(eventType uint8, srcPort, dstPort
 		return "doh"
 	}
 	return ""
+}
+
+func isGeoIPEligible(ipStr string) bool {
+	addr, err := netip.ParseAddr(ipStr)
+	if err != nil || !addr.IsValid() {
+		return false
+	}
+	if addr.IsPrivate() || addr.IsLoopback() || addr.IsLinkLocalUnicast() || addr.IsMulticast() {
+		return false
+	}
+	return true
+}
+
+func (nm *NetworkMonitor) updateGeoForIP(device *models.DeviceInfo, ipStr string) {
+	if device == nil || !isGeoIPEligible(ipStr) || nm.geoipDB == nil {
+		return
+	}
+	record, err := nm.geoipDB.City(net.ParseIP(ipStr))
+	if err != nil {
+		return
+	}
+	if record.Country.Names != nil {
+		device.GeoCountry = record.Country.Names["en"]
+	}
+	device.GeoCountryCode = record.Country.IsoCode
+	if record.City.Names != nil {
+		device.GeoCity = record.City.Names["en"]
+	}
 }
 
 func (nm *NetworkMonitor) getServiceName(port uint16, protocol string) string {
@@ -390,6 +438,7 @@ func (nm *NetworkMonitor) TrackEvent(evt *models.NetworkEvent) {
 	if device.IP != srcIP && srcIP != "0.0.0.0" {
 		device.IP = srcIP
 	}
+	nm.updateGeoForIP(device, srcIP)
 
 	device.TrafficTypeCounts[trafficType]++
 	device.Services[service]++

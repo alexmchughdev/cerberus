@@ -36,6 +36,13 @@ func main() {
 		panic(err)
 	}
 	defer mon.Close()
+	if geoipDBPath := os.Getenv("CERBERUS_GEOIP_DB"); geoipDBPath != "" {
+		if err := mon.EnableGeoIP(geoipDBPath); err != nil {
+			fmt.Printf("GeoIP disabled: failed to load DB %q: %v\n", geoipDBPath, err)
+		} else {
+			fmt.Printf("GeoIP enabled with DB: %s\n", geoipDBPath)
+		}
+	}
 
 	// Start REST API + dashboard server
 	apiAddr := os.Getenv("CERBERUS_HTTP_ADDR")

@@ -74,6 +74,9 @@ type NetworkEvent struct {
 	DstMac    [6]byte
 	SrcIP     uint32
 	DstIP     uint32
+	IsIPv6    uint8
+	SrcIPv6   [16]byte
+	DstIPv6   [16]byte
 	SrcPort   uint16
 	DstPort   uint16
 	Protocol  uint8

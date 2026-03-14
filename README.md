@@ -290,7 +290,7 @@ Cerberus performs deep packet inspection to extract application-layer informatio
 
 ### Packet Structure
 
-The eBPF program captures 75 bytes per event:
+The eBPF program captures 112 bytes per event:
 
 ```c
 struct network_event {
@@ -299,6 +299,9 @@ struct network_event {
     __u8 dst_mac[6];       // 6 bytes - Destination MAC address
     __u32 src_ip;          // 4 bytes - Source IP address
     __u32 dst_ip;          // 4 bytes - Destination IP address
+    __u8 is_ipv6;          // 1 byte  - 0 for IPv4, 1 for IPv6
+    __u8 src_ipv6[16];     // 16 bytes - Source IPv6 address
+    __u8 dst_ipv6[16];     // 16 bytes - Destination IPv6 address
     __u16 src_port;        // 2 bytes - Source port
     __u16 dst_port;        // 2 bytes - Destination port
     __u8 protocol;         // 1 byte  - IP protocol number
@@ -310,7 +313,7 @@ struct network_event {
     __u8 icmp_code;        // 1 byte  - ICMP code
     __u8 l7_payload[32];   // 32 bytes - Layer 7 payload for inspection
 } __attribute__((packed));
-// Total: 75 bytes
+// Total: 112 bytes
 ```
 
 ## Configuration
@@ -464,9 +467,9 @@ curl https://zrouga.email
 ### Short packet warnings
 
 ```bash
-# If you see "Short packet: X bytes (expected 75)"
+# If you see "Short packet: X bytes (expected 112)"
 # This indicates a mismatch between eBPF and Go code
-# Ensure both are using the same structure size (75 bytes)
+# Ensure both are using the same structure size (112 bytes)
 ```
 
 ## Security Considerations
@@ -491,7 +494,7 @@ curl https://zrouga.email
 - [x] REST API for external integrations
 - [x] Web dashboard for visualization
 - [ ] Anomaly detection using ML
-- [ ] IPv6 support
+- [x] IPv6 support
 - [ ] Expand L7 payload capture to 128-256 bytes for better SNI/HTTP header extraction
 - [ ] Add proper DNS response parsing
 - [ ] Add HTTP Host header extraction

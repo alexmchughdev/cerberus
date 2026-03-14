@@ -49,6 +49,14 @@ func ParseNetworkEvent(data []byte) *models.NetworkEvent {
 	evt.DstIP = binary.LittleEndian.Uint32(data[offset : offset+4])
 	offset += 4
 
+	// IPv6 marker and addresses
+	evt.IsIPv6 = data[offset]
+	offset += 1
+	copy(evt.SrcIPv6[:], data[offset:offset+16])
+	offset += 16
+	copy(evt.DstIPv6[:], data[offset:offset+16])
+	offset += 16
+
 	// Source Port (2 bytes)
 	evt.SrcPort = binary.LittleEndian.Uint16(data[offset : offset+2])
 	offset += 2
@@ -101,6 +109,24 @@ func IntToIP(i uint32) net.IP {
 	b := make([]byte, 4)
 	binary.LittleEndian.PutUint32(b, i)
 	return net.IP(b)
+}
+
+func IPv6BytesToString(ip [16]byte) string {
+	return net.IP(ip[:]).String()
+}
+
+func EventSrcIPString(evt *models.NetworkEvent) string {
+	if evt != nil && evt.IsIPv6 == 1 {
+		return IPv6BytesToString(evt.SrcIPv6)
+	}
+	return IntToIP(evt.SrcIP).String()
+}
+
+func EventDstIPString(evt *models.NetworkEvent) string {
+	if evt != nil && evt.IsIPv6 == 1 {
+		return IPv6BytesToString(evt.DstIPv6)
+	}
+	return IntToIP(evt.DstIP).String()
 }
 
 func MacToString(mac [6]byte) string {

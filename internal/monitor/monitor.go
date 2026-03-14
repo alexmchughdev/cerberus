@@ -87,7 +87,7 @@ func NewNetworkMonitor(cacheSize int, dbPath string) (*NetworkMonitor, error) {
 			MaxTCPConnections:      500,
 			MaxUniqueTargets:       40,
 		},
-		localSubnet:    localSubnet,
+		localSubnet: localSubnet,
 	}
 
 	go nm.persistWorker()
@@ -291,8 +291,8 @@ func (nm *NetworkMonitor) TrackEvent(evt *models.NetworkEvent) {
 	nm.Stats.TotalPackets++
 
 	srcMAC := utils.MacToString(evt.SrcMac)
-	srcIP := utils.IntToIP(evt.SrcIP).String()
-	dstIP := utils.IntToIP(evt.DstIP).String()
+	srcIP := utils.EventSrcIPString(evt)
+	dstIP := utils.EventDstIPString(evt)
 
 	var trafficType models.TrafficType
 	var service string

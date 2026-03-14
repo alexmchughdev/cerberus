@@ -1,6 +1,10 @@
 package utils
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/zrougamed/cerberus/internal/models"
+)
 
 func TestExtractHTTPHost(t *testing.T) {
 	var payload [32]byte
@@ -82,5 +86,19 @@ func TestTLSVersionFromPayload(t *testing.T) {
 	invalid[0] = 0x17
 	if got := TLSVersionFromPayload(invalid); got != "" {
 		t.Fatalf("expected empty version for invalid record, got %q", got)
+	}
+}
+
+func TestEventIPStringIPv6(t *testing.T) {
+	evt := &models.NetworkEvent{
+		IsIPv6:  1,
+		SrcIPv6: [16]byte{0x20, 0x01, 0x0d, 0xb8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1},
+		DstIPv6: [16]byte{0x26, 0x06, 0x47, 0x00, 0x47, 0x00, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x11},
+	}
+	if got := EventSrcIPString(evt); got != "2001:db8::1" {
+		t.Fatalf("expected 2001:db8::1, got %q", got)
+	}
+	if got := EventDstIPString(evt); got != "2606:4700:4700::11" {
+		t.Fatalf("expected 2606:4700:4700::11, got %q", got)
 	}
 }

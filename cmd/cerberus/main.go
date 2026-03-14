@@ -186,8 +186,8 @@ func main() {
 	// Event processor goroutine
 	go func() {
 		eventCount := 0
-		// Expected packet size: 79 bytes as defined in cerberus_tc.c
-		expectedSize := 79
+		// Expected packet size: 112 bytes as defined in cerberus_tc.c
+		expectedSize := 112
 
 		for {
 			// Read event from ring buffer
@@ -235,7 +235,7 @@ func main() {
 
 				fmt.Printf("Event #%d: Type=%s(%d) SrcIP=%s DstIP=%s SrcPort=%d DstPort=%d\n",
 					eventCount, eventTypeStr, evt.EventType,
-					utils.IntToIP(evt.SrcIP), utils.IntToIP(evt.DstIP),
+					utils.EventSrcIPString(evt), utils.EventDstIPString(evt),
 					evt.SrcPort, evt.DstPort)
 			}
 

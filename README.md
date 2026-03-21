@@ -290,7 +290,7 @@ Cerberus performs deep packet inspection to extract application-layer informatio
 
 ### Packet Structure
 
-The eBPF program captures 112 bytes per event:
+The eBPF program captures 208 bytes per event:
 
 ```c
 struct network_event {
@@ -311,9 +311,9 @@ struct network_event {
     __u8 arp_tha[6];       // 6 bytes - ARP target hardware address
     __u8 icmp_type;        // 1 byte  - ICMP message type
     __u8 icmp_code;        // 1 byte  - ICMP code
-    __u8 l7_payload[32];   // 32 bytes - Layer 7 payload for inspection
+    __u8 l7_payload[128];  // 128 bytes - Layer 7 payload for inspection
 } __attribute__((packed));
-// Total: 112 bytes
+// Total: 208 bytes
 ```
 
 ## Configuration
@@ -467,15 +467,15 @@ curl https://zrouga.email
 ### Short packet warnings
 
 ```bash
-# If you see "Short packet: X bytes (expected 112)"
+# If you see "Short packet: X bytes (expected 208)"
 # This indicates a mismatch between eBPF and Go code
-# Ensure both are using the same structure size (112 bytes)
+# Ensure both are using the same structure size (208 bytes)
 ```
 
 ## Security Considerations
 
 - Requires root privileges for eBPF and TC operations
-- Captures network metadata and first 32 bytes of payload for L7 inspection
+- Captures network metadata and first 128 bytes of payload for L7 inspection
 - Does NOT capture or store complete packet payloads
 - Local database stored at `network.db`
 - No external network connections made by Cerberus itself
@@ -483,7 +483,7 @@ curl https://zrouga.email
 
 ## Known Limitations
 
-1. **TLS SNI Extraction**: Full SNI parsing requires more than 32 bytes of payload. Current implementation detects TLS presence.
+1. **TLS SNI Extraction**: Full SNI parsing may require deeper handshake parsing. Current implementation captures more handshake context and detects TLS version.
 2. **HTTP Host Header**: Current implementation extracts method and path, not the Host header.
 3. **DNS Response Parsing**: Currently only extracts domain from queries, not from responses.
 4. **Encrypted Traffic**: Cannot inspect encrypted payloads (TLS/HTTPS content).
@@ -495,7 +495,7 @@ curl https://zrouga.email
 - [x] Web dashboard for visualization
 - [ ] Anomaly detection using ML
 - [x] IPv6 support
-- [ ] Expand L7 payload capture to 128-256 bytes for better SNI/HTTP header extraction
+- [x] Expand L7 payload capture to 128-256 bytes for better SNI/HTTP header extraction
 - [ ] Add proper DNS response parsing
 - [ ] Add HTTP Host header extraction
 - [x] Implement TLS version detection

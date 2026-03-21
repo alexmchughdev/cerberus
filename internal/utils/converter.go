@@ -27,6 +27,9 @@ func Max(a, b int) int {
 
 func ParseNetworkEvent(data []byte) *models.NetworkEvent {
 	evt := &models.NetworkEvent{}
+	if len(data) < models.EventSize {
+		return evt
+	}
 	offset := 0
 
 	// Event type (1 byte)
@@ -97,9 +100,9 @@ func ParseNetworkEvent(data []byte) *models.NetworkEvent {
 	evt.IfIndex = binary.LittleEndian.Uint32(data[offset : offset+4])
 	offset += 4
 
-	// L7 Payload (32 bytes)
-	if len(data) >= offset+32 {
-		copy(evt.L7Payload[:], data[offset:offset+32])
+	// L7 Payload
+	if len(data) >= offset+models.L7PayloadSize {
+		copy(evt.L7Payload[:], data[offset:offset+models.L7PayloadSize])
 	}
 
 	return evt
@@ -144,7 +147,7 @@ func IfIndexToName(ifindex uint32) string {
 }
 
 // InspectDNS extracts domain name from DNS query/response payload
-func InspectDNS(payload [32]byte) string {
+func InspectDNS(payload [models.L7PayloadSize]byte) string {
 	// Simple DNS query name extraction
 	// DNS query format: [transaction_id(2)][flags(2)][questions(2)][answers(2)][authority(2)][additional(2)][query...]
 	if len(payload) < 13 {
@@ -177,7 +180,7 @@ func InspectDNS(payload [32]byte) string {
 }
 
 // InspectHTTP extracts HTTP method and path from payload
-func InspectHTTP(payload [32]byte) (method string, path string) {
+func InspectHTTP(payload [models.L7PayloadSize]byte) (method string, path string) {
 	str := string(payload[:])
 
 	// Check for HTTP methods
@@ -216,7 +219,7 @@ func InspectHTTP(payload [32]byte) (method string, path string) {
 	return method, path
 }
 
-func ExtractHTTPHost(payload [32]byte) string {
+func ExtractHTTPHost(payload [models.L7PayloadSize]byte) string {
 	str := strings.ToLower(string(payload[:]))
 	idx := strings.Index(str, "host:")
 	if idx == -1 {
@@ -268,7 +271,7 @@ func DNSRCodeName(rcode uint8) string {
 	}
 }
 
-func InspectDNSDetails(payload [32]byte) (domain, queryType, responseCode string, isResponse bool) {
+func InspectDNSDetails(payload [models.L7PayloadSize]byte) (domain, queryType, responseCode string, isResponse bool) {
 	if len(payload) < 12 {
 		return "", "", "", false
 	}
@@ -303,7 +306,7 @@ func InspectDNSDetails(payload [32]byte) (domain, queryType, responseCode string
 }
 
 // InspectTLS extracts SNI from TLS Client Hello
-func InspectTLS(payload [32]byte) string {
+func InspectTLS(payload [models.L7PayloadSize]byte) string {
 	// TLS Client Hello starts with: 0x16 (handshake), 0x03 0x01/0x03 (version)
 	if len(payload) < 5 {
 		return ""
@@ -314,7 +317,7 @@ func InspectTLS(payload [32]byte) string {
 	}
 
 	// Simple SNI extraction would require parsing the full TLS handshake
-	// TODO: Full SNI parsing requires more than 32 bytes typically
+	// TODO: Full SNI parsing may require deeper handshake parsing.
 
 	if version := TLSVersionFromPayload(payload); version != "" {
 		return version
@@ -322,7 +325,7 @@ func InspectTLS(payload [32]byte) string {
 	return "TLS"
 }
 
-func TLSVersionFromPayload(payload [32]byte) string {
+func TLSVersionFromPayload(payload [models.L7PayloadSize]byte) string {
 	if len(payload) < 3 {
 		return ""
 	}

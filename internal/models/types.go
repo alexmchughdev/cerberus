@@ -5,6 +5,11 @@ import "time"
 type TrafficType string
 
 const (
+	L7PayloadSize = 128
+	EventSize     = 208
+)
+
+const (
 	EVENT_TYPE_ARP  = 1
 	EVENT_TYPE_TCP  = 2
 	EVENT_TYPE_UDP  = 3
@@ -86,8 +91,8 @@ type NetworkEvent struct {
 	ArpTha    [6]byte
 	ICMPType  uint8
 	ICMPCode  uint8
-	IfIndex   uint32   // Interface index
-	L7Payload [32]byte // First 32 bytes of payload for L7 inspection
+	IfIndex   uint32              // Interface index
+	L7Payload [L7PayloadSize]byte // First bytes of payload for L7 inspection
 }
 
 type ServiceInfo struct {

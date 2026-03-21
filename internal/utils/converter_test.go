@@ -7,7 +7,7 @@ import (
 )
 
 func TestExtractHTTPHost(t *testing.T) {
-	var payload [32]byte
+	var payload [models.L7PayloadSize]byte
 	copy(payload[:], []byte("Host: api.local\r\nUser-Agent: t"))
 	host := ExtractHTTPHost(payload)
 	if host != "api.local" {
@@ -16,7 +16,7 @@ func TestExtractHTTPHost(t *testing.T) {
 }
 
 func TestInspectDNSDetailsQueryAndResponse(t *testing.T) {
-	var query [32]byte
+	var query [models.L7PayloadSize]byte
 	// DNS header: QR=0, one question
 	query[2] = 0x01
 	query[3] = 0x00
@@ -50,7 +50,7 @@ func TestInspectDNSDetailsQueryAndResponse(t *testing.T) {
 		t.Fatalf("expected query packet")
 	}
 
-	var response [32]byte
+	var response [models.L7PayloadSize]byte
 	response[2] = 0x81 // QR=1
 	response[3] = 0x83 // RCODE=3 NXDOMAIN
 	domain, qtype, rcode, isResp = InspectDNSDetails(response)
@@ -66,7 +66,7 @@ func TestInspectDNSDetailsQueryAndResponse(t *testing.T) {
 }
 
 func TestTLSVersionFromPayload(t *testing.T) {
-	var tls12 [32]byte
+	var tls12 [models.L7PayloadSize]byte
 	tls12[0] = 0x16
 	tls12[1] = 0x03
 	tls12[2] = 0x03
@@ -74,7 +74,7 @@ func TestTLSVersionFromPayload(t *testing.T) {
 		t.Fatalf("expected TLS 1.2, got %q", got)
 	}
 
-	var tls13 [32]byte
+	var tls13 [models.L7PayloadSize]byte
 	tls13[0] = 0x16
 	tls13[1] = 0x03
 	tls13[2] = 0x04
@@ -82,7 +82,7 @@ func TestTLSVersionFromPayload(t *testing.T) {
 		t.Fatalf("expected TLS 1.3, got %q", got)
 	}
 
-	var invalid [32]byte
+	var invalid [models.L7PayloadSize]byte
 	invalid[0] = 0x17
 	if got := TLSVersionFromPayload(invalid); got != "" {
 		t.Fatalf("expected empty version for invalid record, got %q", got)

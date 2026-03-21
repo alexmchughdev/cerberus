@@ -37,6 +37,7 @@
 // HTTPS/TLS port
 #define HTTPS_PORT 443
 #define HTTPS_ALT_PORT 8443
+#define L7_PAYLOAD_SIZE 128
 
 // Define ICMP header structure directly to avoid including <linux/icmp.h>
 struct icmp_hdr {
@@ -83,9 +84,9 @@ struct network_event {
     __u8 icmp_type;        // 1 byte
     __u8 icmp_code;        // 1 byte
     __u32 ifindex;         // 4 bytes
-    __u8 l7_payload[32];   // 32 bytes
+    __u8 l7_payload[L7_PAYLOAD_SIZE];   // 128 bytes
 } __attribute__((packed));
-// Total: 112 bytes
+// Total: 208 bytes
 
 struct {
     __uint(type, BPF_MAP_TYPE_RINGBUF);
@@ -194,9 +195,6 @@ static __always_inline int handle_tcp(struct __sk_buff *skb, struct ethhdr *eth,
     e->is_ipv6 = 0;
     __builtin_memset(e->src_ipv6, 0, 16);
     __builtin_memset(e->dst_ipv6, 0, 16);
-    e->is_ipv6 = 0;
-    __builtin_memset(e->src_ipv6, 0, 16);
-    __builtin_memset(e->dst_ipv6, 0, 16);
     e->src_port = src_port;
     e->dst_port = dst_port;
     e->protocol = PROTO_TCP;
@@ -217,17 +215,17 @@ static __always_inline int handle_tcp(struct __sk_buff *skb, struct ethhdr *eth,
     __builtin_memset(e->arp_sha, 0, 6);
     __builtin_memset(e->arp_tha, 0, 6);
 
-    // Copy first 32 bytes of TCP payload (if present)
+    // Copy first 128 bytes of TCP payload (if present)
     __u8 *payload = (__u8 *)tcph + (tcph->doff * 4);
-    __builtin_memset(e->l7_payload, 0, 32);
+    __builtin_memset(e->l7_payload, 0, L7_PAYLOAD_SIZE);
     
     if ((void *)payload < data_end) {
         __u64 size = (__u64)data_end - (__u64)payload;
         if (size > 0) {
-            if (size > 32) size = 32;
+            if (size > L7_PAYLOAD_SIZE) size = L7_PAYLOAD_SIZE;
             
             #pragma unroll
-            for (int i = 0; i < 32; i++) {
+            for (int i = 0; i < L7_PAYLOAD_SIZE; i++) {
                 if (i < size && (void *)(payload + i) < data_end) {
                     e->l7_payload[i] = payload[i];
                 } else {
@@ -282,6 +280,9 @@ static __always_inline int handle_udp(struct __sk_buff *skb, struct ethhdr *eth,
     __builtin_memcpy(e->dst_mac, eth->h_dest, 6);
     e->src_ip = iph->saddr;
     e->dst_ip = iph->daddr;
+    e->is_ipv6 = 0;
+    __builtin_memset(e->src_ipv6, 0, 16);
+    __builtin_memset(e->dst_ipv6, 0, 16);
     e->src_port = src_port;
     e->dst_port = dst_port;
     e->protocol = PROTO_UDP;
@@ -293,17 +294,17 @@ static __always_inline int handle_udp(struct __sk_buff *skb, struct ethhdr *eth,
     __builtin_memset(e->arp_sha, 0, 6);
     __builtin_memset(e->arp_tha, 0, 6);
 
-    // Copy first 32 bytes of UDP payload (DNS, etc.)
+    // Copy first 128 bytes of UDP payload (DNS, etc.)
     __u8 *payload = (__u8 *)(udph + 1);
-    __builtin_memset(e->l7_payload, 0, 32);
+    __builtin_memset(e->l7_payload, 0, L7_PAYLOAD_SIZE);
     
     if ((void *)payload < data_end) {
         __u64 size = (__u64)data_end - (__u64)payload;
         if (size > 0) {
-            if (size > 32) size = 32;
+            if (size > L7_PAYLOAD_SIZE) size = L7_PAYLOAD_SIZE;
             
             #pragma unroll
-            for (int i = 0; i < 32; i++) {
+            for (int i = 0; i < L7_PAYLOAD_SIZE; i++) {
                 if (i < size && (void *)(payload + i) < data_end) {
                     e->l7_payload[i] = payload[i];
                 } else {
@@ -346,7 +347,7 @@ static __always_inline int handle_icmp(struct __sk_buff *skb, struct ethhdr *eth
     e->dst_port = 0;
     __builtin_memset(e->arp_sha, 0, 6);
     __builtin_memset(e->arp_tha, 0, 6);
-    __builtin_memset(e->l7_payload, 0, 32);
+    __builtin_memset(e->l7_payload, 0, L7_PAYLOAD_SIZE);
 
     bpf_ringbuf_submit(e, 0);
     return TC_ACT_OK;
@@ -386,13 +387,13 @@ static __always_inline int handle_tcp6(struct __sk_buff *skb, struct ethhdr *eth
     __builtin_memset(e->arp_sha, 0, 6);
     __builtin_memset(e->arp_tha, 0, 6);
     __u8 *payload = (__u8 *)tcph + (tcph->doff * 4);
-    __builtin_memset(e->l7_payload, 0, 32);
+    __builtin_memset(e->l7_payload, 0, L7_PAYLOAD_SIZE);
     if ((void *)payload < data_end) {
         __u64 size = (__u64)data_end - (__u64)payload;
         if (size > 0) {
-            if (size > 32) size = 32;
+            if (size > L7_PAYLOAD_SIZE) size = L7_PAYLOAD_SIZE;
             #pragma unroll
-            for (int i = 0; i < 32; i++) {
+            for (int i = 0; i < L7_PAYLOAD_SIZE; i++) {
                 if (i < size && (void *)(payload + i) < data_end) e->l7_payload[i] = payload[i];
                 else break;
             }
@@ -436,7 +437,7 @@ static __always_inline int handle_udp6(struct __sk_buff *skb, struct ethhdr *eth
     e->ifindex = skb->ifindex;
     __builtin_memset(e->arp_sha, 0, 6);
     __builtin_memset(e->arp_tha, 0, 6);
-    __builtin_memset(e->l7_payload, 0, 32);
+    __builtin_memset(e->l7_payload, 0, L7_PAYLOAD_SIZE);
     __u8 *payload = (__u8 *)(udph + 1);
     if ((void *)payload < data_end) {
         __u64 size = (__u64)data_end - (__u64)payload;
@@ -478,7 +479,7 @@ static __always_inline int handle_icmp6(struct __sk_buff *skb, struct ethhdr *et
     e->dst_port = 0;
     __builtin_memset(e->arp_sha, 0, 6);
     __builtin_memset(e->arp_tha, 0, 6);
-    __builtin_memset(e->l7_payload, 0, 32);
+    __builtin_memset(e->l7_payload, 0, L7_PAYLOAD_SIZE);
     bpf_ringbuf_submit(e, 0);
     return TC_ACT_OK;
 }

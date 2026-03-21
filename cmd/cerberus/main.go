@@ -16,6 +16,7 @@ import (
 	"github.com/cilium/ebpf/ringbuf"
 
 	"github.com/zrougamed/cerberus/internal/api"
+	"github.com/zrougamed/cerberus/internal/models"
 	"github.com/zrougamed/cerberus/internal/monitor"
 	"github.com/zrougamed/cerberus/internal/utils"
 )
@@ -186,8 +187,8 @@ func main() {
 	// Event processor goroutine
 	go func() {
 		eventCount := 0
-		// Expected packet size: 112 bytes as defined in cerberus_tc.c
-		expectedSize := 112
+		// Expected packet size as defined in cerberus_tc.c
+		expectedSize := models.EventSize
 
 		for {
 			// Read event from ring buffer

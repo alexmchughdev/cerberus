@@ -193,7 +193,7 @@ func (nm *NetworkMonitor) classifyICMPTraffic(icmpType, icmpCode uint8) models.T
 	}
 }
 
-func (nm *NetworkMonitor) classifyDNSTraffic(payload [32]byte) models.TrafficType {
+func (nm *NetworkMonitor) classifyDNSTraffic(payload [models.L7PayloadSize]byte) models.TrafficType {
 	// DNS queries have QR bit = 0, responses have QR bit = 1
 	// Flags are in bytes 2-3, QR is the first bit of byte 2
 	if len(payload) >= 3 {
@@ -205,7 +205,7 @@ func (nm *NetworkMonitor) classifyDNSTraffic(payload [32]byte) models.TrafficTyp
 	return models.TrafficDNSQuery
 }
 
-func (nm *NetworkMonitor) classifyHTTPTraffic(payload [32]byte) models.TrafficType {
+func (nm *NetworkMonitor) classifyHTTPTraffic(payload [models.L7PayloadSize]byte) models.TrafficType {
 	str := string(payload[:])
 	if strings.HasPrefix(str, "GET ") {
 		return models.TrafficHTTPGET
@@ -215,7 +215,7 @@ func (nm *NetworkMonitor) classifyHTTPTraffic(payload [32]byte) models.TrafficTy
 	return models.TrafficHTTPRequest
 }
 
-func (nm *NetworkMonitor) classifyTLSTraffic(payload [32]byte) models.TrafficType {
+func (nm *NetworkMonitor) classifyTLSTraffic(payload [models.L7PayloadSize]byte) models.TrafficType {
 	// TLS handshake record type 0x16, followed by version
 	if len(payload) >= 6 {
 		// Check for Client Hello (handshake type 0x01)

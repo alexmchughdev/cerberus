@@ -368,26 +368,27 @@ func (nm *NetworkMonitor) TrackEvent(evt *models.NetworkEvent) {
 	if device == nil {
 		vendor := nm.lookupVendor(srcMAC)
 		device = &models.DeviceInfo{
-			MAC:               srcMAC,
-			IP:                srcIP,
-			Vendor:            vendor,
-			Interface:         utils.IfIndexToName(evt.IfIndex),
-			FirstSeen:         time.Now(),
-			LastSeen:          time.Now(),
-			Targets:           []string{},
-			Services:          make(map[string]int),
-			DNSDomains:        make(map[string]int),
-			DNSQueryTypes:     make(map[string]int),
-			DNSResponseCodes:  make(map[string]int),
-			EncryptedDNS:      make(map[string]int),
-			CorrelatedDomains: make(map[string]int),
-			HTTPHosts:         make(map[string]int),
-			TLSSNIs:           make(map[string]int),
-			TLSVersions:       make(map[string]int),
-			RecentDNSQueries:  make(map[string]time.Time),
-			SeenPatterns:      make(map[string]bool),
-			TrafficTypeCounts: make(map[models.TrafficType]int),
-			FlowStats:         make(map[string]*models.FlowStats),
+			MAC:                srcMAC,
+			IP:                 srcIP,
+			Vendor:             vendor,
+			Interface:          utils.IfIndexToName(evt.IfIndex),
+			FirstSeen:          time.Now(),
+			LastSeen:           time.Now(),
+			Targets:            []string{},
+			Services:           make(map[string]int),
+			DNSDomains:         make(map[string]int),
+			DNSResponseDomains: make(map[string]int),
+			DNSQueryTypes:      make(map[string]int),
+			DNSResponseCodes:   make(map[string]int),
+			EncryptedDNS:       make(map[string]int),
+			CorrelatedDomains:  make(map[string]int),
+			HTTPHosts:          make(map[string]int),
+			TLSSNIs:            make(map[string]int),
+			TLSVersions:        make(map[string]int),
+			RecentDNSQueries:   make(map[string]time.Time),
+			SeenPatterns:       make(map[string]bool),
+			TrafficTypeCounts:  make(map[models.TrafficType]int),
+			FlowStats:          make(map[string]*models.FlowStats),
 		}
 		isNew = true
 	}
@@ -410,6 +411,9 @@ func (nm *NetworkMonitor) TrackEvent(evt *models.NetworkEvent) {
 	}
 	if device.HTTPHosts == nil {
 		device.HTTPHosts = make(map[string]int)
+	}
+	if device.DNSResponseDomains == nil {
+		device.DNSResponseDomains = make(map[string]int)
 	}
 	if device.DNSQueryTypes == nil {
 		device.DNSQueryTypes = make(map[string]int)
@@ -462,14 +466,19 @@ func (nm *NetworkMonitor) TrackEvent(evt *models.NetworkEvent) {
 
 	if evt.EventType == models.EVENT_TYPE_DNS {
 		device.DNSQueries++
-		_, queryType, responseCode, isResponse := utils.InspectDNSDetails(evt.L7Payload)
+		queryDomain, queryType, responseCode, responseDomain, isResponse := utils.InspectDNSDetails(evt.L7Payload)
 		if queryType != "" {
 			device.DNSQueryTypes[queryType]++
 		}
 		if isResponse && responseCode != "" {
 			device.DNSResponseCodes[responseCode]++
 		}
-		if l7Info != "" {
+		if isResponse && responseDomain != "" {
+			device.DNSResponseDomains[responseDomain]++
+		}
+		if !isResponse && queryDomain != "" {
+			device.RecentDNSQueries[queryDomain] = time.Now()
+		} else if l7Info != "" {
 			device.RecentDNSQueries[l7Info] = time.Now()
 		}
 	}

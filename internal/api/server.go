@@ -50,6 +50,7 @@ type summaryResponse struct {
 	TopVendors       map[string]int      `json:"top_vendors"`
 	DNSQueryTypes    map[string]int      `json:"dns_query_types"`
 	DNSResponseCodes map[string]int      `json:"dns_response_codes"`
+	DNSResponseNames map[string]int      `json:"dns_response_domains"`
 	EncryptedDNS     map[string]int      `json:"encrypted_dns"`
 	TLSVersions      map[string]int      `json:"tls_versions"`
 	DNSCorrelated    map[string]int      `json:"dns_correlated_domains"`
@@ -91,6 +92,7 @@ func (s *Server) handleSummary(w http.ResponseWriter, r *http.Request) {
 	topVendors := make(map[string]int)
 	dnsQueryTypes := make(map[string]int)
 	dnsResponseCodes := make(map[string]int)
+	dnsResponseNames := make(map[string]int)
 	encryptedDNS := make(map[string]int)
 	tlsVersions := make(map[string]int)
 	dnsCorrelated := make(map[string]int)
@@ -105,6 +107,9 @@ func (s *Server) handleSummary(w http.ResponseWriter, r *http.Request) {
 		}
 		for rcode, count := range d.DNSResponseCodes {
 			dnsResponseCodes[rcode] += count
+		}
+		for domain, count := range d.DNSResponseDomains {
+			dnsResponseNames[domain] += count
 		}
 		for mode, count := range d.EncryptedDNS {
 			encryptedDNS[mode] += count
@@ -145,6 +150,7 @@ func (s *Server) handleSummary(w http.ResponseWriter, r *http.Request) {
 		TopVendors:       topMap(topVendors, 8),
 		DNSQueryTypes:    topMap(dnsQueryTypes, 8),
 		DNSResponseCodes: topMap(dnsResponseCodes, 8),
+		DNSResponseNames: topMap(dnsResponseNames, 8),
 		EncryptedDNS:     topMap(encryptedDNS, 8),
 		TLSVersions:      topMap(tlsVersions, 8),
 		DNSCorrelated:    topMap(dnsCorrelated, 8),

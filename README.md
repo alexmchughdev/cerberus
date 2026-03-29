@@ -484,8 +484,8 @@ curl https://zrouga.email
 ## Known Limitations
 
 1. **TLS SNI Extraction**: Full SNI parsing may require deeper handshake parsing. Current implementation captures more handshake context and detects TLS version.
-2. **HTTP Host Header**: Current implementation extracts method and path, not the Host header.
-3. **DNS Response Parsing**: Currently only extracts domain from queries, not from responses.
+2. **HTTP Host Header**: Host extraction depends on header bytes being present in captured payload and does not yet parse absolute-form URIs.
+3. **DNS Response Parsing**: Parses response codes and answer domains from observed payload windows; full RR-set parsing may require deeper packet capture.
 4. **Encrypted Traffic**: Cannot inspect encrypted payloads (TLS/HTTPS content).
 
 ## Roadmap
@@ -496,8 +496,8 @@ curl https://zrouga.email
 - [ ] Anomaly detection using ML
 - [x] IPv6 support
 - [x] Expand L7 payload capture to 128-256 bytes for better SNI/HTTP header extraction
-- [ ] Add proper DNS response parsing
-- [ ] Add HTTP Host header extraction
+- [x] Add proper DNS response parsing
+- [x] Add HTTP Host header extraction
 - [x] Implement TLS version detection
 - [x] Support for identifying encrypted DNS (DoH/DoT)
 - [x] Track DNS response codes and query types

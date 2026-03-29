@@ -8,7 +8,7 @@ import (
 
 func TestExtractHTTPHost(t *testing.T) {
 	var payload [models.L7PayloadSize]byte
-	copy(payload[:], []byte("Host: api.local\r\nUser-Agent: t"))
+	copy(payload[:], []byte("GET /health HTTP/1.1\r\nHost: api.local\r\nUser-Agent: t\r\n\r\n"))
 	host := ExtractHTTPHost(payload)
 	if host != "api.local" {
 		t.Fatalf("expected api.local, got %q", host)
@@ -36,7 +36,7 @@ func TestInspectDNSDetailsQueryAndResponse(t *testing.T) {
 	query[21] = 0
 	query[22] = 1 // QCLASS IN
 
-	domain, qtype, rcode, isResp := InspectDNSDetails(query)
+	domain, qtype, rcode, responseDomain, isResp := InspectDNSDetails(query)
 	if domain != "a.com" {
 		t.Fatalf("expected domain a.com, got %q", domain)
 	}
@@ -49,19 +49,76 @@ func TestInspectDNSDetailsQueryAndResponse(t *testing.T) {
 	if isResp {
 		t.Fatalf("expected query packet")
 	}
+	if responseDomain != "" {
+		t.Fatalf("did not expect responseDomain for query, got %q", responseDomain)
+	}
 
 	var response [models.L7PayloadSize]byte
 	response[2] = 0x81 // QR=1
 	response[3] = 0x83 // RCODE=3 NXDOMAIN
-	domain, qtype, rcode, isResp = InspectDNSDetails(response)
+	domain, qtype, rcode, responseDomain, isResp = InspectDNSDetails(response)
 	if !isResp {
 		t.Fatalf("expected response packet")
 	}
 	if rcode != "NXDOMAIN" {
 		t.Fatalf("expected NXDOMAIN, got %q", rcode)
 	}
-	if domain != "" || qtype != "" {
+	if domain != "" || qtype != "" || responseDomain != "" {
 		t.Fatalf("expected empty domain/qtype for minimal response payload")
+	}
+}
+
+func TestInspectDNSDetailsResponseAnswerParsing(t *testing.T) {
+	var payload [models.L7PayloadSize]byte
+	// Header: response, qd=1, an=1
+	payload[2] = 0x81
+	payload[3] = 0x80
+	payload[4] = 0x00
+	payload[5] = 0x01
+	payload[6] = 0x00
+	payload[7] = 0x01
+	// Question: a.com
+	payload[12] = 1
+	payload[13] = 'a'
+	payload[14] = 3
+	payload[15] = 'c'
+	payload[16] = 'o'
+	payload[17] = 'm'
+	payload[18] = 0
+	payload[19] = 0x00
+	payload[20] = 0x01
+	payload[21] = 0x00
+	payload[22] = 0x01
+	// Answer: name pointer to question, type A, class IN, ttl, rdlen=4
+	payload[23] = 0xC0
+	payload[24] = 0x0C
+	payload[25] = 0x00
+	payload[26] = 0x01
+	payload[27] = 0x00
+	payload[28] = 0x01
+	payload[29] = 0x00
+	payload[30] = 0x00
+	payload[31] = 0x00
+	payload[32] = 0x3C
+	payload[33] = 0x00
+	payload[34] = 0x04
+	payload[35] = 1
+	payload[36] = 2
+	payload[37] = 3
+	payload[38] = 4
+
+	domain, qtype, rcode, responseDomain, isResp := InspectDNSDetails(payload)
+	if !isResp {
+		t.Fatalf("expected response packet")
+	}
+	if domain != "a.com" || qtype != "A" {
+		t.Fatalf("unexpected query parsed values: domain=%q qtype=%q", domain, qtype)
+	}
+	if rcode != "NOERROR" {
+		t.Fatalf("expected NOERROR, got %q", rcode)
+	}
+	if responseDomain != "a.com" {
+		t.Fatalf("expected response domain a.com, got %q", responseDomain)
 	}
 }
 

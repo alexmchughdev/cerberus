@@ -220,15 +220,39 @@ func InspectHTTP(payload [models.L7PayloadSize]byte) (method string, path string
 }
 
 func ExtractHTTPHost(payload [models.L7PayloadSize]byte) string {
-	str := strings.ToLower(string(payload[:]))
-	idx := strings.Index(str, "host:")
-	if idx == -1 {
+	raw := string(payload[:])
+	raw = strings.Trim(raw, "\x00")
+	lines := strings.Split(raw, "\n")
+	if len(lines) == 0 {
 		return ""
 	}
-	rest := string(payload[idx+len("host:"):])
-	line := strings.TrimSpace(strings.SplitN(rest, "\n", 2)[0])
-	line = strings.TrimSpace(strings.TrimSuffix(line, "\r"))
-	return line
+	first := strings.TrimSpace(strings.TrimSuffix(lines[0], "\r"))
+	if first == "" {
+		return ""
+	}
+	isHTTP := strings.HasPrefix(first, "GET ") ||
+		strings.HasPrefix(first, "POST ") ||
+		strings.HasPrefix(first, "PUT ") ||
+		strings.HasPrefix(first, "DELETE ") ||
+		strings.HasPrefix(first, "HEAD ") ||
+		strings.HasPrefix(first, "PATCH ") ||
+		strings.HasPrefix(first, "OPTIONS ")
+	if !isHTTP {
+		return ""
+	}
+	for _, line := range lines[1:] {
+		l := strings.TrimSpace(strings.TrimSuffix(line, "\r"))
+		if strings.EqualFold(l, "") {
+			break
+		}
+		if idx := strings.Index(l, ":"); idx > 0 {
+			key := strings.TrimSpace(l[:idx])
+			if strings.EqualFold(key, "Host") {
+				return strings.TrimSpace(l[idx+1:])
+			}
+		}
+	}
+	return ""
 }
 
 func DNSQueryTypeName(queryType uint16) string {
@@ -271,38 +295,106 @@ func DNSRCodeName(rcode uint8) string {
 	}
 }
 
-func InspectDNSDetails(payload [models.L7PayloadSize]byte) (domain, queryType, responseCode string, isResponse bool) {
+func parseDNSName(payload []byte, offset int) (name string, nextOffset int, ok bool) {
+	if offset >= len(payload) {
+		return "", offset, false
+	}
+	labels := make([]string, 0, 6)
+	cur := offset
+	jumped := false
+	jumpLimit := 8
+	for cur < len(payload) && jumpLimit > 0 {
+		length := int(payload[cur])
+		if length == 0 {
+			if jumped {
+				return strings.Join(labels, "."), nextOffset, true
+			}
+			cur++
+			return strings.Join(labels, "."), cur, true
+		}
+		// compression pointer: 11xxxxxx xxxxxxxx
+		if length&0xC0 == 0xC0 {
+			if cur+1 >= len(payload) {
+				return "", offset, false
+			}
+			ptr := int(binary.BigEndian.Uint16(payload[cur:cur+2]) & 0x3FFF)
+			if ptr >= len(payload) {
+				return "", offset, false
+			}
+			if !jumped {
+				nextOffset = cur + 2
+			}
+			cur = ptr
+			jumped = true
+			jumpLimit--
+			continue
+		}
+		if length > 63 || cur+1+length > len(payload) {
+			return "", offset, false
+		}
+		label := string(payload[cur+1 : cur+1+length])
+		labels = append(labels, label)
+		cur += 1 + length
+	}
+	if jumped {
+		return strings.Join(labels, "."), nextOffset, len(labels) > 0
+	}
+	return "", offset, false
+}
+
+func InspectDNSDetails(payload [models.L7PayloadSize]byte) (domain, queryType, responseCode, responseDomain string, isResponse bool) {
 	if len(payload) < 12 {
-		return "", "", "", false
+		return "", "", "", "", false
 	}
 
 	flags := uint16(payload[2])<<8 | uint16(payload[3])
 	isResponse = flags&0x8000 != 0
 	responseCode = DNSRCodeName(uint8(flags & 0x000F))
-
-	domain = InspectDNS(payload)
-	if domain == "" {
-		return domain, "", responseCode, isResponse
-	}
+	qdCount := int(binary.BigEndian.Uint16(payload[4:6]))
+	anCount := int(binary.BigEndian.Uint16(payload[6:8]))
+	wire := payload[:]
 
 	offset := 12
-	for offset < len(payload) {
-		labelLen := int(payload[offset])
-		if labelLen == 0 {
-			offset++
-			break
+	if qdCount > 0 {
+		parsedDomain, next, ok := parseDNSName(wire, offset)
+		if ok {
+			domain = parsedDomain
+			offset = next
+			if offset+4 <= len(wire) {
+				qtype := binary.BigEndian.Uint16(wire[offset : offset+2])
+				queryType = DNSQueryTypeName(qtype)
+				offset += 4
+			}
 		}
-		if labelLen > 63 || offset+labelLen+1 > len(payload) {
-			return domain, "", responseCode, isResponse
+	}
+	if isResponse && anCount > 0 {
+		for i := 0; i < anCount; i++ {
+			ansName, next, ok := parseDNSName(wire, offset)
+			if !ok || next+10 > len(wire) {
+				break
+			}
+			typ := binary.BigEndian.Uint16(wire[next : next+2])
+			rdLen := int(binary.BigEndian.Uint16(wire[next+8 : next+10]))
+			rdataStart := next + 10
+			rdataEnd := rdataStart + rdLen
+			if rdataEnd > len(wire) {
+				break
+			}
+			if responseDomain == "" {
+				// Prefer CNAME target for richer response parsing.
+				if typ == 5 {
+					if cname, _, ok := parseDNSName(wire, rdataStart); ok && cname != "" {
+						responseDomain = cname
+					}
+				}
+				if responseDomain == "" && ansName != "" {
+					responseDomain = ansName
+				}
+			}
+			offset = rdataEnd
 		}
-		offset += labelLen + 1
 	}
-	if offset+2 > len(payload) {
-		return domain, "", responseCode, isResponse
-	}
-	qtype := binary.BigEndian.Uint16(payload[offset : offset+2])
-	queryType = DNSQueryTypeName(qtype)
-	return domain, queryType, responseCode, isResponse
+	return domain, queryType, responseCode, responseDomain, isResponse
 }
 
 // InspectTLS extracts SNI from TLS Client Hello

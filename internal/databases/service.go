@@ -1,8 +1,10 @@
 package databases
 
 import (
+	"encoding/csv"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -40,10 +42,11 @@ const (
 	// IANA Service Names and Port Numbers
 	IANA_SERVICES_URL = "https://www.iana.org/assignments/service-names-port-numbers/service-names-port-numbers.csv"
 
-	// Local cache settings
 	SERVICES_CACHE_FILE = "iana_services.csv"
 	THREATS_CACHE_FILE  = "threat_ports.txt"
-	SERVICES_CACHE_DAYS = 90 // Refresh every 90 days
+	servicesCacheDays   = 90
+	// Max contiguous IANA port range expanded into discrete assignments (inclusive span).
+	maxIANAPortRangeSpan = 512
 )
 
 // NewServiceDatabase creates a comprehensive service database
@@ -53,8 +56,8 @@ func NewServiceDatabase(enableOnline bool) (*ServiceDatabase, error) {
 		tcpServices:    make(map[uint16]*models.ServiceInfo),
 		udpServices:    make(map[uint16]*models.ServiceInfo),
 		threatPorts:    make(map[uint16]ThreatInfo),
-		dbPath:         filepath.Join(CACHE_DIR, SERVICES_CACHE_FILE),
-		threatListPath: filepath.Join(CACHE_DIR, THREATS_CACHE_FILE),
+		dbPath:         filepath.Join(DataDir(), SERVICES_CACHE_FILE),
+		threatListPath: filepath.Join(DataDir(), THREATS_CACHE_FILE),
 	}
 
 	// Load threat intelligence database
@@ -77,17 +80,21 @@ func NewServiceDatabase(enableOnline bool) (*ServiceDatabase, error) {
 	return db, nil
 }
 
-// LoadServiceDatabase returns basic map for backward compatibility
+// LoadServiceDatabase returns a shallow copy of the aggregate port map (TCP preferred over UDP).
 func LoadServiceDatabase() map[uint16]*models.ServiceInfo {
 	db, _ := NewServiceDatabase(false)
-	return db.services
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+	out := make(map[uint16]*models.ServiceInfo, len(db.services))
+	for k, v := range db.services {
+		out[k] = v
+	}
+	return out
 }
 
 // downloadIANADatabase downloads the official IANA service registry
 func (db *ServiceDatabase) downloadIANADatabase() error {
-	fmt.Println("Downloading IANA service registry...")
-
-	if err := os.MkdirAll(CACHE_DIR, 0755); err != nil {
+	if err := os.MkdirAll(DataDir(), 0755); err != nil {
 		return err
 	}
 
@@ -124,7 +131,7 @@ func (db *ServiceDatabase) downloadIANADatabase() error {
 	count := db.parseIANACSV(string(body))
 	db.lastSync = time.Now()
 
-	fmt.Printf("Successfully loaded %d services from IANA registry\n", count)
+	log.Printf("databases: loaded %d IANA service rows into registry", count)
 	return nil
 }
 
@@ -135,7 +142,7 @@ func (db *ServiceDatabase) loadFromCache() error {
 		return fmt.Errorf("cache not found: %w", err)
 	}
 
-	if time.Since(fileInfo.ModTime()) > SERVICES_CACHE_DAYS*24*time.Hour {
+	if time.Since(fileInfo.ModTime()) > servicesCacheDays*24*time.Hour {
 		return fmt.Errorf("cache outdated")
 	}
 
@@ -147,61 +154,114 @@ func (db *ServiceDatabase) loadFromCache() error {
 	count := db.parseIANACSV(string(data))
 	db.lastSync = fileInfo.ModTime()
 
-	fmt.Printf("Loaded %d services from cache (age: %s)\n",
+	log.Printf("databases: loaded %d IANA service rows from cache (age %s)",
 		count, time.Since(fileInfo.ModTime()).Round(24*time.Hour))
 
 	return nil
 }
 
-// parseIANACSV parses IANA CSV format
+func expandIANAPortField(portField string) ([]uint16, bool) {
+	s := strings.TrimSpace(portField)
+	if s == "" {
+		return nil, false
+	}
+	if strings.Contains(s, "-") {
+		parts := strings.SplitN(s, "-", 2)
+		lo, err1 := strconv.ParseUint(strings.TrimSpace(parts[0]), 10, 16)
+		hi, err2 := strconv.ParseUint(strings.TrimSpace(parts[1]), 10, 16)
+		if err1 != nil || err2 != nil || lo > hi {
+			return nil, false
+		}
+		if hi-lo > maxIANAPortRangeSpan {
+			return []uint16{uint16(lo)}, true
+		}
+		out := make([]uint16, 0, hi-lo+1)
+		for p := lo; p <= hi; p++ {
+			out = append(out, uint16(p))
+		}
+		return out, true
+	}
+	v, err := strconv.ParseUint(s, 10, 16)
+	if err != nil {
+		return nil, false
+	}
+	return []uint16{uint16(v)}, true
+}
+
+func ianaDisplayName(serviceName string, port uint16, protocol string) string {
+	if strings.TrimSpace(serviceName) != "" {
+		return strings.ToUpper(strings.TrimSpace(serviceName))
+	}
+	return strings.ToUpper(fmt.Sprintf("%s-%d", protocol, port))
+}
+
+// parseIANACSV parses the official IANA CSV (quoted fields, comma inside description, port ranges).
 func (db *ServiceDatabase) parseIANACSV(data string) int {
-	lines := strings.Split(data, "\n")
+	db.mu.Lock()
+	db.services = make(map[uint16]*models.ServiceInfo)
+	db.tcpServices = make(map[uint16]*models.ServiceInfo)
+	db.udpServices = make(map[uint16]*models.ServiceInfo)
+	db.mu.Unlock()
+
+	r := csv.NewReader(strings.NewReader(data))
+	r.FieldsPerRecord = -1
+	r.LazyQuotes = true
+	r.ReuseRecord = true
+
 	count := 0
-
-	for i, line := range lines {
-		if i == 0 || line == "" {
-			continue // Skip header
+	for {
+		rec, err := r.Read()
+		if err == io.EOF {
+			break
 		}
-
-		fields := strings.Split(line, ",")
-		if len(fields) < 4 {
+		if err != nil {
+			break
+		}
+		if len(rec) < 4 {
+			continue
+		}
+		if strings.EqualFold(strings.TrimSpace(rec[0]), "Service Name") &&
+			strings.EqualFold(strings.TrimSpace(rec[1]), "Port Number") {
 			continue
 		}
 
-		serviceName := strings.TrimSpace(fields[0])
-		portRange := strings.TrimSpace(fields[1])
-		protocol := strings.ToUpper(strings.TrimSpace(fields[2]))
-		description := strings.TrimSpace(fields[3])
+		serviceName := strings.TrimSpace(rec[0])
+		protocol := strings.ToUpper(strings.TrimSpace(rec[2]))
+		if protocol != "TCP" && protocol != "UDP" {
+			continue
+		}
+		description := strings.TrimSpace(rec[3])
 
-		// Parse port (skip ranges for now)
-		if strings.Contains(portRange, "-") {
+		ports, ok := expandIANAPortField(rec[1])
+		if !ok {
 			continue
 		}
 
-		port, err := strconv.ParseUint(portRange, 10, 16)
-		if err != nil || port == 0 || port > 65535 {
-			continue
+		for _, portNum := range ports {
+			if portNum == 0 {
+				continue
+			}
+			svc := &models.ServiceInfo{
+				Port:        portNum,
+				Protocol:    protocol,
+				Service:     ianaDisplayName(serviceName, portNum, protocol),
+				Description: description,
+			}
+
+			db.mu.Lock()
+			switch protocol {
+			case "TCP":
+				db.tcpServices[portNum] = svc
+				db.services[portNum] = svc
+			case "UDP":
+				db.udpServices[portNum] = svc
+				if _, exists := db.services[portNum]; !exists {
+					db.services[portNum] = svc
+				}
+			}
+			db.mu.Unlock()
+			count++
 		}
-
-		portNum := uint16(port)
-
-		service := &models.ServiceInfo{
-			Port:        portNum,
-			Protocol:    protocol,
-			Service:     strings.ToUpper(serviceName),
-			Description: description,
-		}
-
-		db.mu.Lock()
-		if protocol == "TCP" {
-			db.tcpServices[portNum] = service
-		} else if protocol == "UDP" {
-			db.udpServices[portNum] = service
-		}
-		db.services[portNum] = service
-		db.mu.Unlock()
-
-		count++
 	}
 
 	return count
@@ -345,19 +405,24 @@ func (db *ServiceDatabase) loadFallbackDatabase() {
 	}
 
 	db.mu.Lock()
-	// Split into TCP/UDP maps
+	db.services = make(map[uint16]*models.ServiceInfo)
+	db.tcpServices = make(map[uint16]*models.ServiceInfo)
+	db.udpServices = make(map[uint16]*models.ServiceInfo)
 	for port, svc := range fallback {
 		switch svc.Protocol {
 		case "TCP":
 			db.tcpServices[port] = svc
+			db.services[port] = svc
 		case "UDP":
 			db.udpServices[port] = svc
+			if _, exists := db.services[port]; !exists {
+				db.services[port] = svc
+			}
 		}
 	}
-
 	db.mu.Unlock()
 
-	fmt.Printf("Using fallback database with %d services\n", len(fallback))
+	log.Printf("databases: using embedded IANA service fallback (%d ports)", len(fallback))
 }
 
 // loadThreatDatabase loads known dangerous ports
@@ -467,6 +532,8 @@ func (db *ServiceDatabase) GetStats() map[string]any {
 		"threat_ports":   len(db.threatPorts),
 		"last_sync":      db.lastSync,
 		"cache_age":      time.Since(db.lastSync).Round(24 * time.Hour).String(),
+		"data_dir":       DataDir(),
+		"cache_file":     db.dbPath,
 	}
 }
 

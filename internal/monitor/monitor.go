@@ -22,14 +22,15 @@ import (
 type NetworkMonitor struct {
 	Cache          *lru.Cache[string, *models.DeviceInfo]
 	db             *buntdb.DB
-	ouiDB          map[string]string
-	serviceDB      map[uint16]*models.ServiceInfo
+	ouiDB          *databases.OUIDatabase
+	serviceDB      *databases.ServiceDatabase
 	mu             sync.RWMutex
 	newDeviceChan  chan *models.DeviceInfo
 	newPatternChan chan *models.CommunicationPattern
 	alerts         []models.AlertEvent
 	alertRuleState map[string]bool
 	alertConfig    models.AlertRuleConfig
+	anomaly        *anomalyDetector
 	geoipDB        *geoip2.Reader
 	localSubnet    *net.IPNet
 	Stats          struct {
@@ -73,11 +74,15 @@ func NewNetworkMonitor(cacheSize int, dbPath string) (*NetworkMonitor, error) {
 
 	localSubnet := network.DetectLocalSubnet()
 
+	online := databases.OnlineDB()
+	oui, _ := databases.NewOUIDatabase(online)
+	svc, _ := databases.NewServiceDatabase(online)
+
 	nm := &NetworkMonitor{
 		Cache:          cache,
 		db:             db,
-		ouiDB:          databases.LoadOUIDatabase(),
-		serviceDB:      databases.LoadServiceDatabase(),
+		ouiDB:          oui,
+		serviceDB:      svc,
 		newDeviceChan:  make(chan *models.DeviceInfo, 100),
 		newPatternChan: make(chan *models.CommunicationPattern, 1000),
 		alerts:         make([]models.AlertEvent, 0, 128),
@@ -87,6 +92,7 @@ func NewNetworkMonitor(cacheSize int, dbPath string) (*NetworkMonitor, error) {
 			MaxTCPConnections:      500,
 			MaxUniqueTargets:       40,
 		},
+		anomaly:     newAnomalyDetector(),
 		localSubnet: localSubnet,
 	}
 
@@ -278,10 +284,10 @@ func (nm *NetworkMonitor) updateGeoForIP(device *models.DeviceInfo, ipStr string
 }
 
 func (nm *NetworkMonitor) getServiceName(port uint16, protocol string) string {
-	if svc, ok := nm.serviceDB[port]; ok && (svc.Protocol == protocol || svc.Protocol == "BOTH") {
-		return svc.Service
+	if nm.serviceDB == nil {
+		return fmt.Sprintf("%s/%d", protocol, port)
 	}
-	return fmt.Sprintf("%s/%d", protocol, port)
+	return nm.serviceDB.Lookup(port, protocol).Service
 }
 
 func (nm *NetworkMonitor) TrackEvent(evt *models.NetworkEvent) {
@@ -546,6 +552,7 @@ func (nm *NetworkMonitor) TrackEvent(evt *models.NetworkEvent) {
 	// Update cache
 	nm.Cache.Add(srcMAC, device)
 	nm.evaluateAlerts(device)
+	nm.anomaly.observe(time.Now(), evt, srcMAC)
 
 	// Notify if new device
 	// TODO: add to syslog or alerting system
@@ -555,6 +562,13 @@ func (nm *NetworkMonitor) TrackEvent(evt *models.NetworkEvent) {
 		default:
 		}
 	}
+}
+
+func (nm *NetworkMonitor) GetAnomalySnapshot() models.AnomalySnapshot {
+	if nm.anomaly == nil {
+		return models.AnomalySnapshot{Status: "disabled"}
+	}
+	return nm.anomaly.status()
 }
 
 func (nm *NetworkMonitor) evaluateAlerts(device *models.DeviceInfo) {
@@ -698,16 +712,10 @@ func (nm *NetworkMonitor) newPatternNotifier() {
 }
 
 func (nm *NetworkMonitor) lookupVendor(mac string) string {
-	parts := strings.Split(strings.ToUpper(mac), ":")
-	if len(parts) < 3 {
+	if nm.ouiDB == nil {
 		return "Unknown"
 	}
-	oui := strings.Join(parts[:3], ":")
-
-	if vendor, ok := nm.ouiDB[oui]; ok {
-		return vendor
-	}
-	return "Unknown"
+	return nm.ouiDB.Lookup(mac)
 }
 
 func (nm *NetworkMonitor) GetStats() map[string]*models.DeviceInfo {

@@ -31,6 +31,7 @@ func (s *Server) Handler() (http.Handler, error) {
 	mux.HandleFunc("/api/v1/summary", s.handleSummary)
 	mux.HandleFunc("/api/v1/devices", s.handleDevices)
 	mux.HandleFunc("/api/v1/alerts", s.handleAlerts)
+	mux.HandleFunc("/api/v1/anomalies", s.handleAnomalies)
 	mux.HandleFunc("/metrics", s.handleMetrics)
 
 	staticSub, err := fs.Sub(webFS, "web")
@@ -188,6 +189,14 @@ func (s *Server) handleAlerts(w http.ResponseWriter, r *http.Request) {
 		return alerts[i].ObservedAt.After(alerts[j].ObservedAt)
 	})
 	writeJSON(w, http.StatusOK, alerts)
+}
+
+func (s *Server) handleAnomalies(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	writeJSON(w, http.StatusOK, s.monitor.GetAnomalySnapshot())
 }
 
 func (s *Server) handleMetrics(w http.ResponseWriter, r *http.Request) {

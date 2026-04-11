@@ -172,3 +172,29 @@ func TestAlertsEndpointReturnsRecentAlertsFirst(t *testing.T) {
 		}
 	}
 }
+
+func TestAnomaliesEndpointReturnsSnapshot(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "test.db")
+	mon, err := monitor.NewNetworkMonitor(10, dbPath)
+	if err != nil {
+		t.Fatalf("failed to create monitor: %v", err)
+	}
+	defer func() {
+		_ = mon.Close()
+		_ = os.Remove(dbPath)
+	}()
+	srv := NewServer(mon)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/anomalies", nil)
+	rr := httptest.NewRecorder()
+	srv.handleAnomalies(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rr.Code)
+	}
+	var out models.AnomalySnapshot
+	if err := json.Unmarshal(rr.Body.Bytes(), &out); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	if out.WindowSeconds <= 0 {
+		t.Fatalf("expected positive window size, got %d", out.WindowSeconds)
+	}
+}

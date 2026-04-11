@@ -23,39 +23,133 @@
       </button>
     </header>
 
-    <main class="layout">
-      <section class="panel hero">
-        <h2>Live Summary</h2>
-        <p id="generated-at" class="muted">Waiting for telemetry...</p>
-        <div id="stats-grid" class="stats-grid"></div>
-      </section>
+    <nav class="app-nav" aria-label="Main">
+      <a href="#/" data-route>Overview</a>
+      <a href="#/devices" data-route>All devices</a>
+      <a href="#/alerts" data-route>Rule alerts</a>
+      <a href="#/anomalies" data-route>Anomalies</a>
+      <a href="#/raw/summary" data-route>Raw JSON</a>
+    </nav>
 
-      <section class="panel">
-        <h2>Recent Devices</h2>
-        <div id="recent-devices" class="list"></div>
-      </section>
+    <!-- Overview dashboard -->
+    <div id="page-overview" class="page is-active">
+      <main class="layout">
+        <section class="panel hero">
+          <h2>Live Summary</h2>
+          <p id="generated-at" class="muted">Waiting for telemetry...</p>
+          <div id="stats-grid" class="stats-grid"></div>
+        </section>
 
-      <section class="panel">
-        <h2>Top Services</h2>
-        <ul id="top-services" class="rank-list"></ul>
-      </section>
+        <section class="panel">
+          <h2>Recent Devices</h2>
+          <p class="muted"><a href="#/devices">Browse all devices →</a></p>
+          <div id="recent-devices" class="list"></div>
+        </section>
 
-      <section class="panel">
-        <h2>Top Vendors</h2>
-        <ul id="top-vendors" class="rank-list"></ul>
-      </section>
+        <section class="panel">
+          <h2>Top Services</h2>
+          <ul id="top-services" class="rank-list"></ul>
+        </section>
 
-      <section class="panel">
-        <h2>DNS Query Types</h2>
-        <ul id="dns-query-types" class="rank-list"></ul>
-      </section>
+        <section class="panel">
+          <h2>Top Vendors</h2>
+          <ul id="top-vendors" class="rank-list"></ul>
+        </section>
 
-      <section class="panel">
-        <h2>DNS Response Codes</h2>
-        <ul id="dns-response-codes" class="rank-list"></ul>
-      </section>
-    </main>
+        <section class="panel">
+          <h2>DNS Query Types</h2>
+          <ul id="dns-query-types" class="rank-list"></ul>
+        </section>
+
+        <section class="panel">
+          <h2>DNS Response Codes</h2>
+          <ul id="dns-response-codes" class="rank-list"></ul>
+        </section>
+
+        <section class="panel">
+          <h2>Anomaly Detection (ML-lite)</h2>
+          <p id="anomaly-status" class="muted">Model warming up...</p>
+          <p id="anomaly-insight" class="anomaly-insight muted"></p>
+          <div id="anomaly-metrics" class="stats-grid compact"></div>
+          <h3>Recent Anomalies</h3>
+          <p class="muted"><a href="#/anomalies">Full anomaly history →</a></p>
+          <ul id="anomaly-alerts" class="anomaly-alert-list"></ul>
+        </section>
+      </main>
+    </div>
+
+    <!-- All devices -->
+    <div id="page-devices" class="page">
+      <div class="page-inner">
+        <section class="panel">
+          <h2>All devices</h2>
+          <p class="muted">Select a device for full telemetry captured for that MAC.</p>
+          <div id="devices-browser" class="detail-browser"></div>
+        </section>
+      </div>
+    </div>
+
+    <!-- Device detail -->
+    <div id="page-device" class="page">
+      <div class="page-inner">
+        <p class="breadcrumb"><a href="#/devices">← All devices</a></p>
+        <section class="panel">
+          <h2 id="device-detail-title">Device</h2>
+          <div id="device-detail" class="detail-browser"></div>
+        </section>
+      </div>
+    </div>
+
+    <!-- Rule-based alerts -->
+    <div id="page-alerts" class="page">
+      <div class="page-inner">
+        <section class="panel">
+          <h2>Rule-based alerts</h2>
+          <p class="muted">Threshold alerts from the monitor (DNS volume, TCP volume, target spread).</p>
+          <div id="alerts-browser" class="detail-browser"></div>
+        </section>
+      </div>
+    </div>
+
+    <!-- Anomalies full page -->
+    <div id="page-anomalies" class="page">
+      <div class="page-inner">
+        <section class="panel">
+          <h2>Anomaly detection</h2>
+          <p id="anomaly-full-status" class="muted"></p>
+          <p id="anomaly-full-insight" class="anomaly-insight muted"></p>
+          <div id="anomaly-full-metrics" class="stats-grid compact"></div>
+          <h3>Contributors (last window)</h3>
+          <div id="anomaly-last-contrib" class="detail-browser"></div>
+          <h3>All anomaly events</h3>
+          <ul id="anomaly-full-alerts" class="anomaly-alert-list"></ul>
+        </section>
+      </div>
+    </div>
+
+    <!-- Raw JSON explorer -->
+    <div id="page-raw" class="page">
+      <div class="page-inner">
+        <section class="panel">
+          <h2>Raw API explorer</h2>
+          <p class="muted">Read-only view of JSON returned by the REST API.</p>
+          <div class="raw-toolbar">
+            <label>
+              Endpoint
+              <select id="raw-endpoint">
+                <option value="summary">GET /api/v1/summary</option>
+                <option value="devices">GET /api/v1/devices</option>
+                <option value="alerts">GET /api/v1/alerts</option>
+                <option value="anomalies">GET /api/v1/anomalies</option>
+              </select>
+            </label>
+            <button type="button" id="raw-refresh" class="toggle">Refresh</button>
+          </div>
+          <pre id="raw-json" class="raw-json" tabindex="0"></pre>
+        </section>
+      </div>
+    </div>
 
     <script src="/app.js"></script>
   </body>
-  </html>
+</html>

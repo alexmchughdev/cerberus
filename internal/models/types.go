@@ -139,6 +139,55 @@ type AlertEvent struct {
 	ObservedAt time.Time `json:"observed_at"`
 }
 
+type AnomalyFeatures struct {
+	PacketRate        float64 `json:"packet_rate"`
+	DNSRate           float64 `json:"dns_rate"`
+	HTTPRate          float64 `json:"http_rate"`
+	TLSRate           float64 `json:"tls_rate"`
+	TCPSynRate        float64 `json:"tcp_syn_rate"`
+	UniqueDeviceCount float64 `json:"unique_device_count"`
+	UnusualPortCount  float64 `json:"unusual_port_count"`
+	PortEntropy       float64 `json:"port_entropy"`
+	PacketRateSlope   float64 `json:"packet_rate_slope"`
+}
+
+// AnomalyContribution explains one feature’s deviation from the learned baseline.
+type AnomalyContribution struct {
+	Feature        string  `json:"feature"`
+	Label          string  `json:"label"`
+	Value          float64 `json:"value"`
+	BaselineMedian float64 `json:"baseline_median"`
+	RobustZ        float64 `json:"robust_z"`
+}
+
+type AnomalyAlert struct {
+	ObservedAt time.Time       `json:"observed_at"`
+	Score      float64         `json:"score"`
+	Severity   string          `json:"severity"`
+	Reason     string          `json:"reason"`
+	Summary    string          `json:"summary"`
+	Features   AnomalyFeatures `json:"features"`
+	// Contributions sorted by impact (largest robust_z first).
+	Contributions []AnomalyContribution `json:"contributions"`
+}
+
+type AnomalySnapshot struct {
+	WindowSeconds      int             `json:"window_seconds"`
+	Status             string          `json:"status"`
+	BaselineWindows    int             `json:"baseline_windows"`
+	CurrentScore       float64         `json:"current_score"`
+	RobustZScore       float64         `json:"robust_z_score"`
+	CentroidDistance   float64         `json:"centroid_distance"`
+	IsAnomaly          bool            `json:"is_anomaly"`
+	RecentAnomalyCount int             `json:"recent_anomaly_count"`
+	LastFeatures       AnomalyFeatures `json:"last_features"`
+	LastEvaluatedAt    time.Time       `json:"last_evaluated_at"`
+	// Plain-language readout for the most recent scored window.
+	LastSummary       string                `json:"last_summary,omitempty"`
+	LastContributions []AnomalyContribution `json:"last_contributions,omitempty"`
+	RecentAlerts      []AnomalyAlert        `json:"recent_alerts"`
+}
+
 type DeviceInfo struct {
 	MAC                string                `json:"mac"`
 	IP                 string                `json:"ip"`

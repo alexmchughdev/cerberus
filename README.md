@@ -493,7 +493,7 @@ curl https://zrouga.email
 - [ ] Redis backend for distributed deployments
 - [x] REST API for external integrations
 - [x] Web dashboard for visualization
-- [ ] Anomaly detection using ML
+- [x] Anomaly detection using ML
 - [x] IPv6 support
 - [x] Expand L7 payload capture to 128-256 bytes for better SNI/HTTP header extraction
 - [x] Add proper DNS response parsing

@@ -10,7 +10,7 @@ BPF_SRC := ebpf/cerberus_tc.c
 GO_SRC := cmd/cerberus/main.go
 BUILD_DIR := build
 
-.PHONY: all clean build bpf run deps ci ci-build ci-test docker-build docker-run help
+.PHONY: all clean build bpf run deps ci ci-build ci-test docker-build docker-run docker-up docker-down docker-logs docker-web help
 
 all: bpf build
 
@@ -55,6 +55,24 @@ docker-run:
 		-v /sys/kernel/debug:/sys/kernel/debug:rw \
 		-v /sys/fs/bpf:/sys/fs/bpf:rw \
 		cerberus:latest
+
+# Docker Compose - run with API/dashboard
+docker-up:
+	docker compose up -d --build
+	@echo ""
+	@echo "Cerberus is starting..."
+	@echo "Web dashboard/API: http://localhost:8080"
+	@echo "Summary endpoint:  http://localhost:8080/api/v1/summary"
+	@echo "Anomalies endpoint: http://localhost:8080/api/v1/anomalies"
+
+docker-down:
+	docker compose down
+
+docker-logs:
+	docker compose logs -f cerberus
+
+docker-web: docker-up
+	@echo "Open http://localhost:8080 in your browser"
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # CI/CD Targets
@@ -162,6 +180,10 @@ help:
 	@echo "    make run           - Build and run (requires sudo)"
 	@echo "    make docker-build  - Build Docker image"
 	@echo "    make docker-run    - Run in privileged Docker container"
+	@echo "    make docker-up     - Start via docker compose (with web UI)"
+	@echo "    make docker-down   - Stop docker compose stack"
+	@echo "    make docker-logs   - Follow container logs"
+	@echo "    make docker-web    - Start stack and print dashboard URL"
 	@echo ""
 	@echo "  CI/CD:"
 	@echo "    make ci            - Run all CI tests (build + runtime)"

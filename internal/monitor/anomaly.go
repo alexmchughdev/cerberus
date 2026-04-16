@@ -160,13 +160,13 @@ func (ad *anomalyDetector) finalizeLocked(now time.Time) {
 		score = (0.72 * z) + (0.28 * centNorm)
 		isAnomaly = score >= ad.threshold
 		if isAnomaly {
-			summary := buildAnomalySummary(contributions)
 			ad.alerts = append(ad.alerts, models.AnomalyAlert{
 				ObservedAt:    now,
 				Score:         score,
 				Severity:      severityFromScore(score),
 				Reason:        "30s traffic window differs from the learned normal profile (robust z + centroid distance).",
-				Summary:       summary,
+				Summary:       buildPlainLanguageSummary(contributions, true, score, ad.threshold),
+				Detail:        buildAnomalySummary(contributions),
 				Features:      features,
 				Contributions: contributions,
 			})
@@ -177,16 +177,19 @@ func (ad *anomalyDetector) finalizeLocked(now time.Time) {
 	}
 
 	lastSummary := ""
+	lastSummaryDetail := ""
 	switch {
 	case status == "warming_up":
 		lastSummary = "Collecting baseline windows; scoring starts after enough history."
 	case len(contributions) > 0 && isAnomaly:
-		lastSummary = buildAnomalySummary(contributions)
+		lastSummary = buildPlainLanguageSummary(contributions, true, score, ad.threshold)
+		lastSummaryDetail = buildAnomalySummary(contributions)
 	case len(contributions) > 0 && !isAnomaly:
+		lastSummary = buildPlainLanguageSummary(contributions, false, score, ad.threshold)
 		top := contributions[0]
-		lastSummary = fmt.Sprintf(
-			"No anomaly (score %.2f < %.1f). Largest deviation: %s (≈%.1f robust σ from typical).",
-			score, ad.threshold, top.Label, top.RobustZ,
+		lastSummaryDetail = fmt.Sprintf(
+			"%s — this window %.2f vs baseline median %.2f (≈%.1f robust σ).",
+			top.Label, top.Value, top.BaselineMedian, top.RobustZ,
 		)
 	}
 
@@ -201,6 +204,7 @@ func (ad *anomalyDetector) finalizeLocked(now time.Time) {
 		LastFeatures:       features,
 		LastEvaluatedAt:    now,
 		LastSummary:        lastSummary,
+		LastSummaryDetail:  lastSummaryDetail,
 		LastContributions:  contributions,
 		RecentAnomalyCount: countRecent(ad.alerts, now.Add(-10*time.Minute)),
 	}
@@ -327,6 +331,129 @@ func buildAnomalySummary(c []models.AnomalyContribution) string {
 		))
 	}
 	return strings.Join(parts, "; ") + "."
+}
+
+// buildPlainLanguageSummary returns a short operator-facing explanation. When isAnomaly is false,
+// it explains that the score stayed below threshold and names the strongest signal in plain words.
+func buildPlainLanguageSummary(c []models.AnomalyContribution, isAnomaly bool, score, threshold float64) string {
+	if len(c) == 0 {
+		return ""
+	}
+	if !isAnomaly {
+		top := c[0]
+		return fmt.Sprintf(
+			"No anomaly was flagged: combined score %.2f is below %.1f. The strongest difference was in %s.",
+			score, threshold, strings.TrimSuffix(top.Label, "."),
+		)
+	}
+	phrases := collectPlainPhrases(c)
+	if len(phrases) == 0 {
+		return "This 30-second window looks different from your recent baseline across several traffic signals."
+	}
+	switch len(phrases) {
+	case 1:
+		return "This looks unusual mainly because " + phrases[0] + "."
+	case 2:
+		return "This looks unusual mainly because " + phrases[0] + ", and " + phrases[1] + "."
+	default:
+		return "This looks unusual mainly because " + strings.Join(phrases[:len(phrases)-1], "; ") + "; and " + phrases[len(phrases)-1] + "."
+	}
+}
+
+func collectPlainPhrases(c []models.AnomalyContribution) []string {
+	var out []string
+	for i := 0; i < len(c) && len(out) < 3; i++ {
+		if c[i].RobustZ < 0.75 && len(out) >= 1 {
+			break
+		}
+		p := plainPhraseForContribution(c[i])
+		if p != "" {
+			out = append(out, p)
+		}
+	}
+	if len(out) == 0 && len(c) > 0 {
+		if p := plainPhraseForContribution(c[0]); p != "" {
+			out = append(out, p)
+		}
+	}
+	return out
+}
+
+func plainPhraseForContribution(c models.AnomalyContribution) string {
+	above := c.Value >= c.BaselineMedian
+	switch c.Feature {
+	case "packet_rate":
+		if math.Abs(c.RobustZ) < 0.4 {
+			return ""
+		}
+		if above {
+			return "overall traffic volume is much higher than your recent 30-second baseline"
+		}
+		return "overall traffic volume is much lower than your recent baseline"
+	case "dns_rate":
+		if c.RobustZ < 1.0 {
+			return ""
+		}
+		if above {
+			return "DNS lookups per second jumped compared to normal"
+		}
+		return "DNS activity dropped compared to normal"
+	case "http_rate":
+		if c.RobustZ < 1.0 {
+			return ""
+		}
+		if above {
+			return "HTTP traffic spiked relative to normal"
+		}
+		return "HTTP traffic fell sharply compared to normal"
+	case "tls_rate":
+		if c.RobustZ < 1.0 {
+			return ""
+		}
+		if above {
+			return "TLS/HTTPS-style traffic increased sharply"
+		}
+		return "TLS traffic dropped compared to normal"
+	case "tcp_syn_rate":
+		if c.RobustZ < 1.0 {
+			return ""
+		}
+		return "many new TCP handshakes (SYNs) appeared at once—common with port scans or SYN floods"
+	case "unique_device_count":
+		if c.RobustZ < 1.0 {
+			return ""
+		}
+		if above {
+			return "more different devices were active in this window than usual"
+		}
+		return "fewer devices than usual showed up in this window"
+	case "unusual_port_count":
+		if c.RobustZ < 1.0 {
+			return ""
+		}
+		if above {
+			return "traffic hit many uncommon destination ports—often consistent with probing or scanning"
+		}
+		return "destination ports looked unusually concentrated compared to normal"
+	case "port_entropy":
+		if c.RobustZ < 1.0 {
+			return ""
+		}
+		if above {
+			return "destination ports were unusually diverse (spread out)"
+		}
+		return "destination port patterns look unusually uniform"
+	case "packet_rate_slope":
+		if c.RobustZ < 1.0 {
+			return ""
+		}
+		if above {
+			return "traffic pacing jumped compared to the previous 30-second window"
+		}
+		return "traffic pacing dropped sharply compared to the previous 30-second window"
+	default:
+		return ""
+	}
 }
 
 func centroidDistance(baseline []models.AnomalyFeatures, cur models.AnomalyFeatures) float64 {

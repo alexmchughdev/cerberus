@@ -78,16 +78,7 @@ func (s *Server) handleSummary(w http.ResponseWriter, r *http.Request) {
 	}
 
 	devices := s.monitor.GetStats()
-	packetStats := map[string]uint64{
-		"total": s.monitor.Stats.TotalPackets,
-		"arp":   s.monitor.Stats.ArpPackets,
-		"tcp":   s.monitor.Stats.TcpPackets,
-		"udp":   s.monitor.Stats.UdpPackets,
-		"icmp":  s.monitor.Stats.IcmpPackets,
-		"dns":   s.monitor.Stats.DnsPackets,
-		"http":  s.monitor.Stats.HttpPackets,
-		"tls":   s.monitor.Stats.TlsPackets,
-	}
+	packetStats := s.monitor.SnapshotPacketStats()
 
 	topServices := make(map[string]int)
 	topVendors := make(map[string]int)
@@ -206,19 +197,20 @@ func (s *Server) handleMetrics(w http.ResponseWriter, r *http.Request) {
 	}
 
 	devices := s.monitor.GetStats()
+	pkt := s.monitor.SnapshotPacketStats()
 	w.Header().Set("Content-Type", "text/plain; version=0.0.4; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
 
 	fmt.Fprintln(w, "# HELP cerberus_packets_total Total observed packets by protocol.")
 	fmt.Fprintln(w, "# TYPE cerberus_packets_total counter")
-	fmt.Fprintf(w, "cerberus_packets_total{protocol=\"total\"} %d\n", s.monitor.Stats.TotalPackets)
-	fmt.Fprintf(w, "cerberus_packets_total{protocol=\"arp\"} %d\n", s.monitor.Stats.ArpPackets)
-	fmt.Fprintf(w, "cerberus_packets_total{protocol=\"tcp\"} %d\n", s.monitor.Stats.TcpPackets)
-	fmt.Fprintf(w, "cerberus_packets_total{protocol=\"udp\"} %d\n", s.monitor.Stats.UdpPackets)
-	fmt.Fprintf(w, "cerberus_packets_total{protocol=\"icmp\"} %d\n", s.monitor.Stats.IcmpPackets)
-	fmt.Fprintf(w, "cerberus_packets_total{protocol=\"dns\"} %d\n", s.monitor.Stats.DnsPackets)
-	fmt.Fprintf(w, "cerberus_packets_total{protocol=\"http\"} %d\n", s.monitor.Stats.HttpPackets)
-	fmt.Fprintf(w, "cerberus_packets_total{protocol=\"tls\"} %d\n", s.monitor.Stats.TlsPackets)
+	fmt.Fprintf(w, "cerberus_packets_total{protocol=\"total\"} %d\n", pkt["total"])
+	fmt.Fprintf(w, "cerberus_packets_total{protocol=\"arp\"} %d\n", pkt["arp"])
+	fmt.Fprintf(w, "cerberus_packets_total{protocol=\"tcp\"} %d\n", pkt["tcp"])
+	fmt.Fprintf(w, "cerberus_packets_total{protocol=\"udp\"} %d\n", pkt["udp"])
+	fmt.Fprintf(w, "cerberus_packets_total{protocol=\"icmp\"} %d\n", pkt["icmp"])
+	fmt.Fprintf(w, "cerberus_packets_total{protocol=\"dns\"} %d\n", pkt["dns"])
+	fmt.Fprintf(w, "cerberus_packets_total{protocol=\"http\"} %d\n", pkt["http"])
+	fmt.Fprintf(w, "cerberus_packets_total{protocol=\"tls\"} %d\n", pkt["tls"])
 	fmt.Fprintln(w)
 
 	fmt.Fprintln(w, "# HELP cerberus_devices_total Number of tracked devices.")

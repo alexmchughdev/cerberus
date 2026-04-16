@@ -90,7 +90,8 @@ func NewNetworkMonitor(cacheSize int, dbPath string) (*NetworkMonitor, error) {
 		alertConfig: models.AlertRuleConfig{
 			MaxDNSQueriesPerDevice: 200,
 			MaxTCPConnections:      500,
-			MaxUniqueTargets:       40,
+			// Targets keeps at most 20 unique dst IPs per device; threshold must be < 20 or target_spread never fires.
+			MaxUniqueTargets: 18,
 		},
 		anomaly:     newAnomalyDetector(),
 		localSubnet: localSubnet,
@@ -718,6 +719,24 @@ func (nm *NetworkMonitor) lookupVendor(mac string) string {
 	return nm.ouiDB.Lookup(mac)
 }
 
+// SnapshotPacketStats returns a copy of aggregate packet counters (reads under nm.mu.RLock).
+func (nm *NetworkMonitor) SnapshotPacketStats() map[string]uint64 {
+	nm.mu.RLock()
+	defer nm.mu.RUnlock()
+	return map[string]uint64{
+		"total": nm.Stats.TotalPackets,
+		"arp":   nm.Stats.ArpPackets,
+		"tcp":   nm.Stats.TcpPackets,
+		"udp":   nm.Stats.UdpPackets,
+		"icmp":  nm.Stats.IcmpPackets,
+		"dns":   nm.Stats.DnsPackets,
+		"http":  nm.Stats.HttpPackets,
+		"tls":   nm.Stats.TlsPackets,
+	}
+}
+
+// GetStats returns a deep copy of each device suitable for concurrent JSON encoding or printing.
+// Live cache entries are mutated by TrackEvent; callers must not retain pointers across unlock.
 func (nm *NetworkMonitor) GetStats() map[string]*models.DeviceInfo {
 	nm.mu.RLock()
 	defer nm.mu.RUnlock()
@@ -725,27 +744,73 @@ func (nm *NetworkMonitor) GetStats() map[string]*models.DeviceInfo {
 	stats := make(map[string]*models.DeviceInfo)
 	for _, mac := range nm.Cache.Keys() {
 		if device, ok := nm.Cache.Get(mac); ok {
-			stats[mac] = device
+			stats[mac] = cloneDeviceInfo(device)
 		}
 	}
 	return stats
 }
 
+func cloneStringIntMap(m map[string]int) map[string]int {
+	if m == nil {
+		return nil
+	}
+	out := make(map[string]int, len(m))
+	for k, v := range m {
+		out[k] = v
+	}
+	return out
+}
+
+func cloneTrafficTypeIntMap(m map[models.TrafficType]int) map[models.TrafficType]int {
+	if m == nil {
+		return nil
+	}
+	out := make(map[models.TrafficType]int, len(m))
+	for k, v := range m {
+		out[k] = v
+	}
+	return out
+}
+
+func cloneDeviceInfo(d *models.DeviceInfo) *models.DeviceInfo {
+	if d == nil {
+		return nil
+	}
+	c := *d
+	c.Targets = append([]string(nil), d.Targets...)
+	c.Services = cloneStringIntMap(d.Services)
+	c.DNSDomains = cloneStringIntMap(d.DNSDomains)
+	c.DNSResponseDomains = cloneStringIntMap(d.DNSResponseDomains)
+	c.DNSQueryTypes = cloneStringIntMap(d.DNSQueryTypes)
+	c.DNSResponseCodes = cloneStringIntMap(d.DNSResponseCodes)
+	c.EncryptedDNS = cloneStringIntMap(d.EncryptedDNS)
+	c.CorrelatedDomains = cloneStringIntMap(d.CorrelatedDomains)
+	c.HTTPHosts = cloneStringIntMap(d.HTTPHosts)
+	c.TLSSNIs = cloneStringIntMap(d.TLSSNIs)
+	c.TLSVersions = cloneStringIntMap(d.TLSVersions)
+	c.TrafficTypeCounts = cloneTrafficTypeIntMap(d.TrafficTypeCounts)
+	c.RecentDNSQueries = nil
+	c.SeenPatterns = nil
+	c.FlowStats = nil
+	return &c
+}
+
 func (nm *NetworkMonitor) PrintStats() {
 	stats := nm.GetStats()
+	pkt := nm.SnapshotPacketStats()
 
 	fmt.Printf("\n╔═══════════════════════════════════════════════════════════════╗\n")
 	fmt.Printf("║              NETWORK STATISTICS SUMMARY                       ║\n")
 	fmt.Printf("╠═══════════════════════════════════════════════════════════════╣\n")
 	fmt.Printf("║ Total Devices: %-46d ║\n", len(stats))
-	fmt.Printf("║ Total Packets: %-46d ║\n", nm.Stats.TotalPackets)
-	fmt.Printf("║   - ARP:  %-51d ║\n", nm.Stats.ArpPackets)
-	fmt.Printf("║   - TCP:  %-51d ║\n", nm.Stats.TcpPackets)
-	fmt.Printf("║   - UDP:  %-51d ║\n", nm.Stats.UdpPackets)
-	fmt.Printf("║   - ICMP: %-51d ║\n", nm.Stats.IcmpPackets)
-	fmt.Printf("║   - DNS:  %-51d ║\n", nm.Stats.DnsPackets)
-	fmt.Printf("║   - HTTP: %-51d ║\n", nm.Stats.HttpPackets)
-	fmt.Printf("║   - TLS:  %-51d ║\n", nm.Stats.TlsPackets)
+	fmt.Printf("║ Total Packets: %-46d ║\n", pkt["total"])
+	fmt.Printf("║   - ARP:  %-51d ║\n", pkt["arp"])
+	fmt.Printf("║   - TCP:  %-51d ║\n", pkt["tcp"])
+	fmt.Printf("║   - UDP:  %-51d ║\n", pkt["udp"])
+	fmt.Printf("║   - ICMP: %-51d ║\n", pkt["icmp"])
+	fmt.Printf("║   - DNS:  %-51d ║\n", pkt["dns"])
+	fmt.Printf("║   - HTTP: %-51d ║\n", pkt["http"])
+	fmt.Printf("║   - TLS:  %-51d ║\n", pkt["tls"])
 	fmt.Printf("╚═══════════════════════════════════════════════════════════════╝\n\n")
 
 	for mac, device := range stats {

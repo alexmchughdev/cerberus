@@ -161,12 +161,15 @@ type AnomalyContribution struct {
 }
 
 type AnomalyAlert struct {
-	ObservedAt time.Time       `json:"observed_at"`
-	Score      float64         `json:"score"`
-	Severity   string          `json:"severity"`
-	Reason     string          `json:"reason"`
-	Summary    string          `json:"summary"`
-	Features   AnomalyFeatures `json:"features"`
+	ObservedAt time.Time `json:"observed_at"`
+	Score      float64   `json:"score"`
+	Severity   string    `json:"severity"`
+	Reason     string    `json:"reason"`
+	// Summary is plain-language (“why this looks unusual”).
+	Summary string `json:"summary"`
+	// Detail is the technical breakdown (medians, robust σ, etc.).
+	Detail   string          `json:"detail,omitempty"`
+	Features AnomalyFeatures `json:"features"`
 	// Contributions sorted by impact (largest robust_z first).
 	Contributions []AnomalyContribution `json:"contributions"`
 }
@@ -183,7 +186,9 @@ type AnomalySnapshot struct {
 	LastFeatures       AnomalyFeatures `json:"last_features"`
 	LastEvaluatedAt    time.Time       `json:"last_evaluated_at"`
 	// Plain-language readout for the most recent scored window.
-	LastSummary       string                `json:"last_summary,omitempty"`
+	LastSummary string `json:"last_summary,omitempty"`
+	// LastSummaryDetail is the technical paragraph for the same window (medians, σ).
+	LastSummaryDetail string                `json:"last_summary_detail,omitempty"`
 	LastContributions []AnomalyContribution `json:"last_contributions,omitempty"`
 	RecentAlerts      []AnomalyAlert        `json:"recent_alerts"`
 }

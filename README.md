@@ -24,6 +24,44 @@ Cerberus is a high-performance network monitoring tool built with eBPF (Extended
 - **Statistics Dashboard**: Real-time network statistics and device behavior analysis
 - **Smart Deduplication**: Only alert on new traffic patterns (first occurrence)
 - **Persistent Storage**: Local database for historical data with Redis migration path
+- **Control Room (Web UI)**: Hash-routed dashboard for summary, devices, rule alerts, anomalies, and raw JSON
+- **Behavioral anomaly & abuse-style signals**: ML-lite windows highlight SYN-heavy, high-volume, and unusual-port patterns (consistent with scans/floods); rule alerts flag DNS/TCP/target spread; see **[`docs/threat-and-anomaly-patterns.md`](docs/threat-and-anomaly-patterns.md)** for scope and limits (not a full IDS; no dedicated reverse-tunnel classifier)
+
+Full system behavior, data flow, and UI breakdown live in **[`docs/`](docs/README.md)**. Step-by-step **how to trigger alerts** (rule vs anomaly) is in **[`docs/how-to-alerts.md`](docs/how-to-alerts.md)**.
+
+### Web UI wireframe (Control Room)
+
+The dashboard is a single-page shell: the **top bar** shows the product title and theme toggle; **tabs** switch hash routes; **one main region** shows the active page (all panels refresh on a short interval).
+
+```
+┌──────────────────────────────────────────────────────────────────────────┐
+│  Network Guardian                                                        │
+│  Cerberus Control Room                                    [ Dark mode ]  │
+├──────────────────────────────────────────────────────────────────────────┤
+│  Overview │ All devices │ Rule alerts │ Anomalies │ Raw JSON             │
+├──────────────────────────────────────────────────────────────────────────┤
+│                                                                          │
+│   ┌─ Route: #/ (Overview) ─────────────────────────────────────────┐     │
+│   │  ┌─────────────────────┐  ┌─────────────────────┐              │     │
+│   │  │ Live summary        │  │ Recent devices      │              │     │
+│   │  │ (packet counters)   │  │ (links → device)    │              │     │
+│   │  └─────────────────────┘  └─────────────────────┘              │     │
+│   │  ┌──────────────┐ ┌──────────────┐ ┌──────────────┐            │     │
+│   │  │ Top services │ │ Top vendors  │ │ DNS ranks    │            │     │
+│   │  └──────────────┘ └──────────────┘ └──────────────┘            │     │
+│   │  ┌──────────────────────────────────────────────────────────┐  │     │
+│   │  │ Anomaly detection (status, "what it means", metrics,     │  │     │
+│   │  │ recent alerts + link to full history)                    │  │     │
+│   │  └──────────────────────────────────────────────────────────┘  │     │
+│   └────────────────────────────────────────────────────────────────┘     │
+│                                                                          │
+│   Other routes:  #/devices (table)  #/device/<mac> (full device JSON)    │
+│                  #/alerts (table)   #/anomalies (full anomaly UI)        │
+│                  #/raw/<endpoint>   (pretty-printed API JSON)            │
+└──────────────────────────────────────────────────────────────────────────┘
+```
+
+See **[`docs/web-ui.md`](docs/web-ui.md)** for per-screen layout, routes, and which REST endpoints feed each view.
 
 ## Why Cerberus?
 
@@ -356,14 +394,16 @@ cerberus/
 ├── .ci/                # CI/CD tests for compatibility
 ├── build/              # Compiled binaries
 ├── cmd/
-│   └── cerberus/       # Main application entry point
+│   └── cerberus/       # Main application entry point (eBPF + monitor + HTTP)
+├── docs/               # System, API, and web UI documentation
 ├── ebpf/               # eBPF C programs
 │   └── cerberus_tc.c   # TC classifier for packet capture
 ├── internal/
+│   ├── api/            # REST API, Prometheus /metrics, embedded Control Room
 │   ├── cache/          # LRU cache implementation
-│   ├── databases/      # OUI and service databases
-│   ├── models/         # Data structures
-│   ├── monitor/        # Core monitoring logic
+│   ├── databases/      # IEEE OUI + IANA service-name databases
+│   ├── models/         # Data structures (events, devices, alerts, anomalies)
+│   ├── monitor/        # Core monitoring, classification, persistence, rules
 │   ├── network/        # Network utilities
 │   └── utils/          # Helper functions (includes L7 inspection)
 ├── scripts/            # Utility scripts
@@ -478,7 +518,7 @@ curl https://zrouga.email
 - Captures network metadata and first 128 bytes of payload for L7 inspection
 - Does NOT capture or store complete packet payloads
 - Local database stored at `network.db`
-- No external network connections made by Cerberus itself
+- No external network connections by default; optional IEEE/IANA database downloads if `CERBERUS_DB_ONLINE` is enabled (see `docs/system-overview.md`)
 - L7 inspection is limited to protocol identification and metadata extraction
 
 ## Known Limitations
@@ -513,6 +553,8 @@ curl https://zrouga.email
 - **Batch database writes** every 30 seconds
 - **Minimal CPU overhead** with kernel-level filtering
 - **Memory efficient** with configurable cache sizes
+
+Example **Docker** resource use at high link throughput (low CPU/RSS, container NET I/O often zero because traffic is not proxied) is documented in **[`docs/deployment-and-performance.md`](docs/deployment-and-performance.md)**.
 
 ## Compatibility
 

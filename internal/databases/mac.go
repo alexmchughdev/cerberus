@@ -18,11 +18,11 @@ import (
 
 // OUIDatabase is a thread-safe IEEE MA-L vendor registry with optional online lookups.
 type OUIDatabase struct {
-	vendors map[string]string // normalized prefix "AA:BB:CC" (or longer) -> vendor
-	cache   map[string]ouiCacheEntry
-	mu      sync.RWMutex
-	online  bool
-	dbPath  string // primary cache: IEEE MA-L CSV
+	vendors  map[string]string // normalized prefix "AA:BB:CC" (or longer) -> vendor
+	cache    map[string]ouiCacheEntry
+	mu       sync.RWMutex
+	online   bool
+	dbPath   string // primary cache: IEEE MA-L CSV
 	lastSync time.Time
 }
 
@@ -437,13 +437,13 @@ func (db *OUIDatabase) GetStats() map[string]interface{} {
 	db.mu.RLock()
 	defer db.mu.RUnlock()
 	return map[string]interface{}{
-		"total_vendors":   len(db.vendors),
-		"cached_lookups":  len(db.cache),
-		"last_sync":       db.lastSync,
-		"online_enabled":  db.online,
-		"cache_file":      db.dbPath,
-		"data_dir":        DataDir(),
-		"cache_age": time.Since(db.lastSync).Round(time.Hour).String(),
+		"total_vendors":  len(db.vendors),
+		"cached_lookups": len(db.cache),
+		"last_sync":      db.lastSync,
+		"online_enabled": db.online,
+		"cache_file":     db.dbPath,
+		"data_dir":       DataDir(),
+		"cache_age":      time.Since(db.lastSync).Round(time.Hour).String(),
 	}
 }
 

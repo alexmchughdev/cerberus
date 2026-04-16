@@ -300,6 +300,55 @@ h3 {
   line-height: 1.45;
 }
 
+.anomaly-insight-plain {
+  margin: 8px 0 0;
+  font-size: 0.92rem;
+  line-height: 1.5;
+}
+
+.anomaly-details {
+  margin: 10px 0 0;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 8px 12px;
+  background: var(--surface-muted);
+}
+
+.anomaly-details-summary {
+  cursor: pointer;
+  font-weight: 700;
+  font-size: 0.88rem;
+  color: var(--accent);
+  list-style: none;
+}
+
+.anomaly-details-summary::-webkit-details-marker {
+  display: none;
+}
+
+.anomaly-details-summary::before {
+  content: "▸ ";
+  display: inline-block;
+  transition: transform 0.15s ease;
+}
+
+.anomaly-details[open] .anomaly-details-summary::before {
+  transform: rotate(90deg);
+}
+
+.anomaly-details-body {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+}
+
+.anomaly-details-technical {
+  margin: 0 0 8px;
+  font-size: 0.85rem;
+  color: var(--text-soft);
+  line-height: 1.45;
+}
+
 .anomaly-alert-list {
   margin: 8px 0 0;
   padding: 0;

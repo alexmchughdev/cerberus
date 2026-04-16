@@ -160,9 +160,13 @@ function renderAnomalyPanel(snapshot, ids) {
       ? `Model active (${snapshot.baseline_windows} baseline windows)`
       : `Model warming up (${snapshot.baseline_windows || 0}/${Math.max(snapshot.baseline_windows || 1, 20)} baseline windows)`;
   if (insightRoot) {
-    insightRoot.innerHTML = snapshot.last_summary
-      ? `<strong>What it means:</strong> ${escapeHtml(snapshot.last_summary)}`
-      : "";
+    const plain = snapshot.last_summary || "";
+    const detail = snapshot.last_summary_detail || "";
+    if (!plain) {
+      insightRoot.innerHTML = "";
+    } else {
+      insightRoot.innerHTML = formatAnomalyInsightBlock(plain, detail);
+    }
   }
   const vals = [
     ["Score", (snapshot.current_score || 0).toFixed(2)],
@@ -187,12 +191,25 @@ function renderAnomalyPanel(snapshot, ids) {
   alertsRoot.innerHTML = alerts.slice(0, max).map(formatAnomalyAlertLi).join("");
 }
 
+function formatAnomalyInsightBlock(plain, detail) {
+  const body = detail
+    ? `<details class="anomaly-details">
+        <summary class="anomaly-details-summary">Technical details behind the reasoning</summary>
+        <div class="anomaly-details-body">
+          <p class="anomaly-details-technical">${escapeHtml(detail)}</p>
+        </div>
+      </details>`
+    : "";
+  return `<p class="anomaly-insight-plain"><strong>What it means:</strong> ${escapeHtml(plain)}</p>${body}`;
+}
+
 function formatAnomalyAlertLi(a) {
   const when = new Date(a.observed_at).toLocaleString();
   const score = (a.score || 0).toFixed(2);
-  const summary = a.summary || a.reason || "Anomaly flagged.";
+  const plain = a.summary || a.reason || "Anomaly flagged.";
+  const detail = a.detail || "";
   const contrib = (a.contributions || [])
-    .slice(0, 6)
+    .slice(0, 8)
     .map(
       (c) =>
         `<li>${escapeHtml(c.label)}: ${c.value.toFixed(2)} vs typical ${c.baseline_median.toFixed(2)} (≈${c.robust_z.toFixed(
@@ -200,13 +217,23 @@ function formatAnomalyAlertLi(a) {
         )}σ)</li>`,
     )
     .join("");
+  const technicalBlock =
+    detail || contrib
+      ? `<details class="anomaly-details">
+        <summary class="anomaly-details-summary">Technical details behind the reasoning</summary>
+        <div class="anomaly-details-body">
+          ${detail ? `<p class="anomaly-details-technical">${escapeHtml(detail)}</p>` : ""}
+          ${contrib ? `<ul class="anomaly-contrib">${contrib}</ul>` : ""}
+        </div>
+      </details>`
+      : "";
   return `<li>
       <div class="anomaly-alert-head">
         <span class="anomaly-alert-meta">${when} · <strong>${escapeHtml(a.severity)}</strong></span>
         <span class="badge">${score}</span>
       </div>
-      <p class="anomaly-alert-summary">${escapeHtml(summary)}</p>
-      ${contrib ? `<ul class="anomaly-contrib">${contrib}</ul>` : ""}
+      <p class="anomaly-alert-summary">${escapeHtml(plain)}</p>
+      ${technicalBlock}
     </li>`;
 }
 

@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Documentation
+    url: https://github.com/zrougamed/cerberus/tree/master/docs
+    about: Check docs before filing — especially deployment-and-performance.md for Docker/privilege issues.

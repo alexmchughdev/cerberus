@@ -1,0 +1,40 @@
+name: Feature Request
+description: Protocol support, new alert rule, detection improvement, etc.
+labels: ["enhancement", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Cerberus is a passive observer — proposals that require traffic modification or active probing are out of scope.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What are you trying to see or detect
+      description: Describe the network behavior or visibility gap.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What would you add
+      description: eBPF changes, userspace parsing, new alert rule, API field, etc.
+
+  - type: dropdown
+    id: layer
+    attributes:
+      label: Where does this touch
+      multiple: true
+      options:
+        - eBPF / kernel (cerberus_tc.c)
+        - Userspace monitor / alert rules
+        - REST API
+        - Web dashboard
+        - Docs only
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Use case or context
+      description: What problem does this solve in practice.

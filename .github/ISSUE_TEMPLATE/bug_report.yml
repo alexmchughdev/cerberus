@@ -1,0 +1,75 @@
+name: Bug Report
+description: Something isn't working correctly
+labels: ["bug", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Before filing: check `sudo bpftool prog show` and `sudo tc filter show dev <iface> ingress` to confirm the hook is attached.
+
+  - type: textarea
+    id: description
+    attributes:
+      label: What happened
+      description: What did you expect vs what actually occurred.
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. sudo ./cerberus
+        2. ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant output
+      description: Paste cerberus stdout, dmesg errors, or tc output.
+      render: shell
+
+  - type: input
+    id: kernel
+    attributes:
+      label: Kernel version
+      placeholder: "uname -r → 6.8.0-51-generic"
+    validations:
+      required: true
+
+  - type: input
+    id: distro
+    attributes:
+      label: Distribution
+      placeholder: "Ubuntu 24.04 / Debian 12 / Arch"
+    validations:
+      required: true
+
+  - type: input
+    id: cerberus_version
+    attributes:
+      label: Cerberus version / commit
+      placeholder: "v1.0.0 or git sha"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: deployment
+    attributes:
+      label: Running as
+      options:
+        - Binary (sudo ./cerberus)
+        - Docker
+        - Docker Compose
+    validations:
+      required: true
+
+  - type: textarea
+    id: interfaces
+    attributes:
+      label: Network interfaces
+      description: Output of `ip link show`
+      render: shell

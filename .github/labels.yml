@@ -1,0 +1,108 @@
+# Apply with:
+#   gh label create --force "$(jq -r '.name' <<< "$label")" \
+#     --color "$(jq -r '.color' <<< "$label")" \
+#     --description "$(jq -r '.description' <<< "$label")"
+#
+# Or import all at once:
+#   gh api repos/{owner}/{repo}/labels --paginate -q '.[].name' | \
+#     xargs -I{} gh api -X DELETE repos/{owner}/{repo}/labels/{}
+#   cat labels.yml | python3 scripts/apply_labels.py  # see scripts/
+
+labels:
+  # ── Triage ──────────────────────────────────────────────────────────────────
+  - name: needs-triage
+    color: "ededed"
+    description: Not yet reviewed by a maintainer
+
+  - name: confirmed
+    color: "0075ca"
+    description: Reproduced and accepted
+
+  # ── Type ────────────────────────────────────────────────────────────────────
+  - name: bug
+    color: "d73a4a"
+    description: Something is broken
+
+  - name: enhancement
+    color: "a2eeef"
+    description: New feature or improvement
+
+  - name: documentation
+    color: "0075ca"
+    description: Docs only change
+
+  - name: question
+    color: "d876e3"
+    description: Needs clarification or discussion
+
+  # ── Component ───────────────────────────────────────────────────────────────
+  - name: ebpf
+    color: "ff6b35"
+    description: cerberus_tc.c / kernel-space
+
+  - name: monitor
+    color: "ff6b35"
+    description: internal/monitor — alert rules, classification, anomaly
+
+  - name: api
+    color: "ff6b35"
+    description: REST API or web dashboard
+
+  - name: ci
+    color: "ff6b35"
+    description: Build pipeline, workflows, CI
+
+  - name: compatibility
+    color: "ff6b35"
+    description: Kernel version, distro, or container runtime issue
+
+  # ── Protocol / Detection ────────────────────────────────────────────────────
+  - name: protocol:dhcp
+    color: "c5def5"
+    description: DHCP / DHCPv6 visibility or detection
+
+  - name: protocol:ipv6
+    color: "c5def5"
+    description: IPv6 / SLAAC / ICMPv6
+
+  - name: protocol:dns
+    color: "c5def5"
+    description: DNS parsing or detection
+
+  - name: protocol:tls
+    color: "c5def5"
+    description: TLS inspection or SNI extraction
+
+  - name: detection:rogue
+    color: "e4e669"
+    description: Rogue DHCP server, rogue RA, ARP spoofing
+
+  - name: detection:scan
+    color: "e4e669"
+    description: Port scan, ARP scan detection
+
+  # ── Priority ─────────────────────────────────────────────────────────────────
+  - name: priority:high
+    color: "b60205"
+    description: Blocks usage or causes data loss
+
+  - name: priority:low
+    color: "e4e669"
+    description: Nice to have
+
+  # ── Contribution ─────────────────────────────────────────────────────────────
+  - name: good first issue
+    color: "7057ff"
+    description: Good entry point for new contributors
+
+  - name: help wanted
+    color: "008672"
+    description: Maintainer won't get to this soon — PRs welcome
+
+  - name: wontfix
+    color: "ffffff"
+    description: Out of scope or intentional behavior
+
+  - name: duplicate
+    color: "cfd3d7"
+    description: Already reported

@@ -1,0 +1,44 @@
+name: Kernel / eBPF Compatibility
+description: Fails to load, attach, or compile on a specific kernel or distro
+labels: ["ebpf", "compatibility", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Minimum supported kernel is 5.15 (TCX requires 6.6+). Check `grep CONFIG_BPF_SYSCALL /boot/config-$(uname -r)` before filing.
+
+  - type: textarea
+    id: error
+    attributes:
+      label: Error message
+      render: shell
+    validations:
+      required: true
+
+  - type: input
+    id: kernel
+    attributes:
+      label: Kernel version
+      placeholder: "uname -r"
+    validations:
+      required: true
+
+  - type: input
+    id: distro
+    attributes:
+      label: Distribution
+    validations:
+      required: true
+
+  - type: textarea
+    id: bpf_config
+    attributes:
+      label: BPF kernel config
+      description: "`grep CONFIG_BPF /boot/config-$(uname -r)`"
+      render: shell
+
+  - type: textarea
+    id: extra
+    attributes:
+      label: Anything else
+      description: Container runtime, AppArmor/SELinux, custom kernel build, etc.

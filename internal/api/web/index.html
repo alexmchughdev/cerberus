@@ -18,9 +18,14 @@
         <p class="eyebrow">Network Guardian</p>
         <h1>Cerberus Control Room</h1>
       </div>
-      <button id="theme-toggle" class="toggle" type="button" aria-label="Toggle theme">
-        Dark Mode
-      </button>
+      <div class="header-controls">
+        <button id="pause-toggle" class="toggle toggle-pause" type="button" aria-label="Pause live updates">
+          Pause Updates
+        </button>
+        <button id="theme-toggle" class="toggle" type="button" aria-label="Toggle theme">
+          Dark Mode
+        </button>
+      </div>
     </header>
 
     <nav class="app-nav" aria-label="Main">
@@ -83,7 +88,7 @@
       <div class="page-inner">
         <section class="panel">
           <h2>All devices</h2>
-          <p class="muted">Select a device for full telemetry captured for that MAC.</p>
+          <p class="muted">Select a device for full telemetry captured for that MAC. <span id="devices-paused-note" class="paused-badge" hidden>Updates paused</span></p>
           <div id="devices-browser" class="detail-browser"></div>
         </section>
       </div>
@@ -115,7 +120,7 @@
     <div id="page-anomalies" class="page">
       <div class="page-inner">
         <section class="panel">
-          <h2>Anomaly detection</h2>
+          <h2>Anomaly detection <span id="anomalies-paused-note" class="paused-badge" hidden>Updates paused</span></h2>
           <p id="anomaly-full-status" class="muted"></p>
           <p id="anomaly-full-insight" class="anomaly-insight muted"></p>
           <div id="anomaly-full-metrics" class="stats-grid compact"></div>

@@ -14,6 +14,36 @@ const packetLabels = [
 /** @type {Cache} */
 const cache = {};
 
+/** @type {boolean} */
+let paused = false;
+
+/**
+ * Collect the summary text of every open <details> inside a container.
+ * @param {Element} container
+ * @returns {Set<string>}
+ */
+function saveDetailsState(container) {
+  const open = new Set();
+  container.querySelectorAll("details[open]").forEach((d) => {
+    const s = d.querySelector("summary");
+    if (s) open.add(s.textContent.trim());
+  });
+  return open;
+}
+
+/**
+ * Re-open <details> whose summary text is in the saved set.
+ * @param {Element} container
+ * @param {Set<string>} open
+ */
+function restoreDetailsState(container, open) {
+  if (!open.size) return;
+  container.querySelectorAll("details").forEach((d) => {
+    const s = d.querySelector("summary");
+    if (s && open.has(s.textContent.trim())) d.open = true;
+  });
+}
+
 function escapeHtml(s) {
   return String(s)
     .replaceAll("&", "&amp;")
@@ -273,6 +303,20 @@ function renderMapTable(title, obj) {
   return `<h3>${escapeHtml(title)}</h3><table class="map-table"><thead><tr><th>Name</th><th>Count</th></tr></thead><tbody>${rows}</tbody></table>`;
 }
 
+/** @type {{ col: string, dir: 1 | -1 }} */
+let devicesSort = { col: "last_seen", dir: -1 };
+
+function sortDevices(devices) {
+  const { col, dir } = devicesSort;
+  return [...devices].sort((a, b) => {
+    const av = a[col] ?? "";
+    const bv = b[col] ?? "";
+    if (av < bv) return -dir;
+    if (av > bv) return dir;
+    return (a.mac || "").localeCompare(b.mac || ""); // stable tie-break by MAC
+  });
+}
+
 function renderDevicesPage() {
   const root = document.getElementById("devices-browser");
   if (!root) return;
@@ -285,7 +329,30 @@ function renderDevicesPage() {
     root.innerHTML = "<p class='muted'>No devices yet.</p>";
     return;
   }
-  const rows = devices
+
+  const savedScrollY = window.scrollY;
+
+  const colDefs = [
+    ["mac", "MAC"],
+    ["ip", "IP"],
+    ["vendor", "Vendor"],
+    ["dns_queries", "DNS"],
+    ["http_requests", "HTTP"],
+    ["tls_connections", "TLS"],
+    ["last_seen", "Last seen"],
+  ];
+
+  const sortedDevices = sortDevices(devices);
+
+  const headers = colDefs
+    .map(([col, label]) => {
+      const active = devicesSort.col === col;
+      const arrow = active ? (devicesSort.dir === 1 ? " ▲" : " ▼") : "";
+      return `<th class="sortable${active ? " sort-active" : ""}" data-col="${col}">${label}${arrow}</th>`;
+    })
+    .join("");
+
+  const rows = sortedDevices
     .map((d) => {
       const mac = escapeHtml(d.mac);
       return `<tr>
@@ -299,9 +366,28 @@ function renderDevicesPage() {
       </tr>`;
     })
     .join("");
-  root.innerHTML = `<table class="device-table">
-    <thead><tr><th>MAC</th><th>IP</th><th>Vendor</th><th>DNS</th><th>HTTP</th><th>TLS</th><th>Last seen</th></tr></thead>
+
+  root.innerHTML = `<table class="device-table sortable-table">
+    <thead><tr>${headers}</tr></thead>
     <tbody>${rows}</tbody></table>`;
+
+  // Wire up header clicks for sorting
+  root.querySelectorAll("th.sortable").forEach((th) => {
+    th.style.cursor = "pointer";
+    th.addEventListener("click", () => {
+      const col = th.dataset.col;
+      if (devicesSort.col === col) {
+        devicesSort.dir = /** @type {1 | -1} */ (devicesSort.dir * -1);
+      } else {
+        devicesSort.col = col;
+        devicesSort.dir = col === "last_seen" ? -1 : 1;
+      }
+      renderDevicesPage();
+    });
+  });
+
+  // Restore scroll position so the view doesn't jump on each refresh
+  window.scrollTo({ top: savedScrollY, behavior: "instant" });
 }
 
 function renderDevicePage(mac) {
@@ -406,6 +492,11 @@ function renderAnomaliesPage() {
   const contrib = document.getElementById("anomaly-last-contrib");
   const list = document.getElementById("anomaly-full-alerts");
   if (!list) return;
+
+  // Preserve which <details> the user has expanded before re-rendering
+  const openInsight = saveDetailsState(document.getElementById("anomaly-full-insight") || document.createElement("div"));
+  const openAlerts = saveDetailsState(list);
+
   renderAnomalyPanel(snap, {
     status: "anomaly-full-status",
     insight: "anomaly-full-insight",
@@ -413,6 +504,10 @@ function renderAnomaliesPage() {
     alerts: "anomaly-full-alerts",
     maxAlerts: 200,
   });
+
+  restoreDetailsState(document.getElementById("anomaly-full-insight") || document.createElement("div"), openInsight);
+  restoreDetailsState(list, openAlerts);
+
   if (!contrib) return;
   if (snap && (snap.last_contributions || []).length) {
     const rows = snap.last_contributions
@@ -476,7 +571,31 @@ async function refreshData() {
 
 async function tick() {
   await refreshData();
-  renderCurrentRoute();
+  if (!paused) {
+    renderCurrentRoute();
+  }
+}
+
+function updatePausedIndicators() {
+  const devNote = document.getElementById("devices-paused-note");
+  const anomNote = document.getElementById("anomalies-paused-note");
+  if (devNote) devNote.hidden = !paused;
+  if (anomNote) anomNote.hidden = !paused;
+}
+
+function setupPauseToggle() {
+  const btn = document.getElementById("pause-toggle");
+  if (!btn) return;
+  btn.addEventListener("click", () => {
+    paused = !paused;
+    btn.textContent = paused ? "Resume Updates" : "Pause Updates";
+    btn.classList.toggle("is-paused", paused);
+    updatePausedIndicators();
+    if (!paused) {
+      // Immediately refresh so the user sees current data
+      tick();
+    }
+  });
 }
 
 function setupThemeToggle() {
@@ -505,6 +624,7 @@ function setupRouter() {
 }
 
 setupThemeToggle();
+setupPauseToggle();
 setupRouter();
 tick();
 setInterval(tick, 3000);

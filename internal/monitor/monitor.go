@@ -30,6 +30,7 @@ type NetworkMonitor struct {
 	alerts         []models.AlertEvent
 	alertRuleState map[string]bool
 	alertConfig    models.AlertRuleConfig
+	baselines      *securityBaselines
 	anomaly        *anomalyDetector
 	geoipDB        *geoip2.Reader
 	localSubnet    *net.IPNet
@@ -96,6 +97,7 @@ func NewNetworkMonitor(cacheSize int, dbPath string) (*NetworkMonitor, error) {
 		anomaly:     newAnomalyDetector(),
 		localSubnet: localSubnet,
 	}
+	nm.baselines = newSecurityBaselines(nm.alertConfig)
 
 	go nm.persistWorker()
 	go nm.newDeviceNotifier()
@@ -553,6 +555,7 @@ func (nm *NetworkMonitor) TrackEvent(evt *models.NetworkEvent) {
 	// Update cache
 	nm.Cache.Add(srcMAC, device)
 	nm.evaluateAlerts(device)
+	nm.checkSecurityBaselines(device, evt, srcIP, trafficType)
 	nm.anomaly.observe(time.Now(), evt, srcMAC)
 
 	// Notify if new device
@@ -570,6 +573,20 @@ func (nm *NetworkMonitor) GetAnomalySnapshot() models.AnomalySnapshot {
 		return models.AnomalySnapshot{Status: "disabled"}
 	}
 	return nm.anomaly.status()
+}
+
+func (nm *NetworkMonitor) checkSecurityBaselines(device *models.DeviceInfo, evt *models.NetworkEvent, srcIP string, trafficType models.TrafficType) {
+	if nm.baselines == nil || device == nil {
+		return
+	}
+	switch {
+	case trafficType == models.TrafficUDPDHCP:
+		nm.baselines.checkDHCP(nm, device, evt, srcIP)
+	case evt.EventType == models.EVENT_TYPE_ICMP && evt.IsIPv6 == 1:
+		nm.baselines.checkRA(nm, device, evt, srcIP)
+	case evt.EventType == models.EVENT_TYPE_ARP:
+		nm.baselines.checkARP(nm, device, evt, srcIP)
+	}
 }
 
 func (nm *NetworkMonitor) evaluateAlerts(device *models.DeviceInfo) {

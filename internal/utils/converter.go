@@ -445,6 +445,13 @@ func TLSVersionFromPayload(payload [models.L7PayloadSize]byte) string {
 	}
 }
 
+// IsDHCPServerReply reports whether the payload looks like a BOOTREPLY (op=2),
+// which is what DHCP servers send (OFFER, ACK, NAK). Client requests are op=1.
+// This is enough to identify a host acting as a DHCP server without parsing options.
+func IsDHCPServerReply(payload [models.L7PayloadSize]byte) bool {
+	return payload[0] == 2
+}
+
 // GetL7Info extracts layer 7 information based on event type and payload
 func GetL7Info(evt *models.NetworkEvent) string {
 	switch evt.EventType {

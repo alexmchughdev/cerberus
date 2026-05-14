@@ -26,8 +26,13 @@ COPY . .
 # Build eBPF program
 RUN make bpf
 
-# Build Go binary
-RUN CGO_ENABLED=0 go build -ldflags="-s -w" -o cerberus cmd/cerberus/main.go
+# Build Go binary with version metadata stamped via ldflags. Falls back to
+# "unknown" when the build context lacks .git (e.g. CI tarballs).
+RUN COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo unknown) \
+    && BUILD_DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ) \
+    && CGO_ENABLED=0 go build \
+        -ldflags="-s -w -X github.com/zrougamed/cerberus/internal/version.Commit=${COMMIT} -X github.com/zrougamed/cerberus/internal/version.Date=${BUILD_DATE}" \
+        -o cerberus cmd/cerberus/main.go
 
 # Runtime stage
 FROM alpine:latest

@@ -62,6 +62,7 @@ type deviceSummaryItem struct {
 	MAC          string    `json:"mac"`
 	IP           string    `json:"ip"`
 	Vendor       string    `json:"vendor"`
+	IsGateway    bool      `json:"is_gateway,omitempty"`
 	FirstSeen    time.Time `json:"first_seen"`
 	LastSeen     time.Time `json:"last_seen"`
 	TCP          int       `json:"tcp"`
@@ -117,6 +118,7 @@ func (s *Server) handleSummary(w http.ResponseWriter, r *http.Request) {
 			MAC:          d.MAC,
 			IP:           d.IP,
 			Vendor:       d.Vendor,
+			IsGateway:    d.IsGateway,
 			FirstSeen:    d.FirstSeen,
 			LastSeen:     d.LastSeen,
 			TCP:          d.TCPConnections,

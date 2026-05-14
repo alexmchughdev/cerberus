@@ -8,8 +8,7 @@ RUN apk add --no-cache \
     build-base \
     libbpf-dev \
     linux-headers \
-    make \
-    git
+    make
 
 ENV GOCACHE=/root/.cache/go-build
 ENV GOMODCACHE=/go/pkg/mod
@@ -26,13 +25,16 @@ COPY . .
 # Build eBPF program
 RUN make bpf
 
-# Build Go binary with version metadata stamped via ldflags. Falls back to
-# "unknown" when the build context lacks .git (e.g. CI tarballs).
-RUN COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo unknown) \
-    && BUILD_DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ) \
-    && CGO_ENABLED=0 go build \
-        -ldflags="-s -w -X github.com/zrougamed/cerberus/internal/version.Commit=${COMMIT} -X github.com/zrougamed/cerberus/internal/version.Date=${BUILD_DATE}" \
-        -o cerberus cmd/cerberus/main.go
+# Build metadata is passed in from the caller (Makefile / CI workflow). The
+# .git tree is not present in the build context (see .dockerignore), so we
+# never shell out to git here.
+ARG COMMIT=unknown
+ARG BUILD_DATE=unknown
+
+# Build Go binary with version metadata stamped via ldflags.
+RUN CGO_ENABLED=0 go build \
+    -ldflags="-s -w -X github.com/zrougamed/cerberus/internal/version.Commit=${COMMIT} -X github.com/zrougamed/cerberus/internal/version.Date=${BUILD_DATE}" \
+    -o cerberus cmd/cerberus/main.go
 
 # Runtime stage
 FROM alpine:latest

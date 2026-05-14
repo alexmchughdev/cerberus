@@ -49,7 +49,10 @@ deps:
 
 # Docker build
 docker-build:
-	docker build -t cerberus:latest .
+	docker build \
+		--build-arg COMMIT=$(COMMIT) \
+		--build-arg BUILD_DATE=$(BUILD_DATE) \
+		-t cerberus:latest .
 
 # Docker run (privileged for BPF)
 docker-run:
